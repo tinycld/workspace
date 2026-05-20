@@ -58,9 +58,12 @@ export function buildGoWork(coreRelPath: string, pkgs: ServerPkg[]): string {
 // Replace (or create) a symlink at linkPath → target.
 export function replaceSymlink(target: string, linkPath: string) {
     try {
-        if (fs.existsSync(linkPath) || fs.lstatSync(linkPath)) fs.unlinkSync(linkPath)
+        // lstatSync (not existsSync) so a BROKEN existing symlink is still
+        // detected and removed; it throws ENOENT only when nothing is there.
+        fs.lstatSync(linkPath)
+        fs.unlinkSync(linkPath)
     } catch {
-        // not present
+        // nothing at linkPath — nothing to remove
     }
     fs.mkdirSync(path.dirname(linkPath), { recursive: true })
     fs.symlinkSync(target, linkPath)

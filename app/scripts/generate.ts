@@ -147,7 +147,9 @@ async function main() {
     const coreMig = path.join(memberDir('@tinycld/core'), 'server', 'pb_migrations')
     if (fs.existsSync(coreMig)) {
         for (const file of fs.readdirSync(coreMig)) {
-            replaceSymlink(path.join(coreMig, file), path.join(MIGRATIONS_DIR, file))
+            const srcPath = path.join(coreMig, file)
+            if (!fs.statSync(srcPath).isFile()) continue
+            replaceSymlink(srcPath, path.join(MIGRATIONS_DIR, file))
         }
     }
     for (const f of features) {
@@ -155,7 +157,9 @@ async function main() {
             const dir = path.join(f.dir, f.manifest.migrations.directory)
             if (fs.existsSync(dir)) {
                 for (const file of fs.readdirSync(dir)) {
-                    replaceSymlink(path.join(dir, file), path.join(MIGRATIONS_DIR, file))
+                    const srcPath = path.join(dir, file)
+                    if (!fs.statSync(srcPath).isFile()) continue
+                    replaceSymlink(srcPath, path.join(MIGRATIONS_DIR, file))
                 }
             }
         }
@@ -163,7 +167,9 @@ async function main() {
             const dir = path.join(f.dir, f.manifest.hooks.directory)
             if (fs.existsSync(dir)) {
                 for (const file of fs.readdirSync(dir)) {
-                    replaceSymlink(path.join(dir, file), path.join(HOOKS_DIR, file))
+                    const srcPath = path.join(dir, file)
+                    if (!fs.statSync(srcPath).isFile()) continue
+                    replaceSymlink(srcPath, path.join(HOOKS_DIR, file))
                 }
             }
         }
@@ -171,11 +177,17 @@ async function main() {
 
     // --- 7. server: Go wiring (package_extensions.go + go.work) ------------
     const serverPkgs: ServerPkg[] = features
-        .filter(
-            f =>
-                f.manifest.server?.package &&
-                fs.existsSync(path.join(f.dir, f.manifest.server.package))
-        )
+        .filter(f => {
+            if (!f.manifest.server?.package) return false
+            if (!fs.existsSync(path.join(f.dir, f.manifest.server.package))) return false
+            if (!f.manifest.server.module) {
+                console.warn(
+                    `[generate] ${f.manifest.slug}: server.package declared but server.module is missing — Go wiring skipped`
+                )
+                return false
+            }
+            return true
+        })
         .map(f => ({
             slug: f.manifest.slug,
             module: f.manifest.server!.module,

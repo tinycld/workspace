@@ -65,4 +65,22 @@ describe('replaceSymlink', () => {
             fs.rmSync(tmp, { recursive: true, force: true })
         }
     })
+
+    it('removes a broken symlink (target deleted between runs)', () => {
+        const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tcld-symlink-'))
+        try {
+            const target = path.join(tmp, 'will-disappear.js')
+            const newTarget = path.join(tmp, 'replacement.js')
+            fs.writeFileSync(target, 'OLD')
+            fs.writeFileSync(newTarget, 'NEW')
+            const link = path.join(tmp, 'link.js')
+            replaceSymlink(target, link)
+            fs.unlinkSync(target) // target disappears — link is now broken
+            // should not throw and should repoint to newTarget
+            replaceSymlink(newTarget, link)
+            expect(fs.readFileSync(link, 'utf8')).toBe('NEW')
+        } finally {
+            fs.rmSync(tmp, { recursive: true, force: true })
+        }
+    })
 })
