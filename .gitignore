@@ -32,3 +32,6 @@ app/tmp/
 
 # Spike scratch
 spike2/
+
+# @tinycld/core is its own repo (cloned as a sibling member)
+/core/
