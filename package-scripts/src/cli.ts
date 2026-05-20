@@ -1,0 +1,101 @@
+#!/usr/bin/env tsx
+import * as fs from 'node:fs'
+import * as path from 'node:path'
+import { type CurrentPackage, discover } from './discovery'
+import { runAll } from './orchestrator'
+import {
+    buildCheckCommands,
+    buildE2eCommand,
+    buildTestCommand,
+    buildTypecheckCommand,
+    type Command,
+} from './runners'
+import { runCommand } from './spawn'
+
+type Verb = 'typecheck' | 'test' | 'test:e2e' | 'check'
+
+function commandsFor(verb: Verb, pkg: CurrentPackage, appDir: string): Command[] {
+    switch (verb) {
+        case 'typecheck':
+            return [buildTypecheckCommand(pkg, appDir)]
+        case 'test':
+            return [buildTestCommand(pkg, appDir)]
+        case 'test:e2e':
+            return [buildE2eCommand(pkg, appDir)]
+        case 'check':
+            return buildCheckCommands(pkg, appDir)
+    }
+}
+
+// Build the "all" target list for a verb: features (+ app shell for non-e2e).
+// Read the workspace member dirs directly to avoid importing app code.
+function allTargets(workspaceRoot: string, appDir: string, verb: Verb): CurrentPackage[] {
+    const targets: CurrentPackage[] = []
+    for (const entry of fs.readdirSync(workspaceRoot)) {
+        const dir = path.join(workspaceRoot, entry)
+        let pj: { name?: string }
+        try {
+            pj = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'))
+        } catch {
+            continue
+        }
+        const hasManifest =
+            fs.existsSync(path.join(dir, 'manifest.ts')) ||
+            fs.existsSync(path.join(dir, 'manifest.js'))
+        if (hasManifest && pj.name) targets.push({ dir, name: pj.name, kind: 'feature' })
+        else if (dir === appDir && pj.name === 'app' && verb !== 'test:e2e')
+            targets.push({ dir, name: 'app', kind: 'app' })
+    }
+    // Skip targets that have nothing to run for the verb.
+    return targets.filter(t => {
+        if (verb === 'test:e2e') return fs.existsSync(path.join(t.dir, 'playwright.config.ts'))
+        if (verb === 'test') return fs.existsSync(path.join(t.dir, 'vitest.config.ts'))
+        return fs.existsSync(path.join(t.dir, 'tsconfig.json'))
+    })
+}
+
+async function runForPackage(verb: Verb, pkg: CurrentPackage, appDir: string): Promise<number> {
+    for (const cmd of commandsFor(verb, pkg, appDir)) {
+        const code = await runCommand(cmd)
+        if (code !== 0) return code
+    }
+    return 0
+}
+
+async function main() {
+    const [verb, ...rest] = process.argv.slice(2) as [Verb, ...string[]]
+    if (!verb) {
+        console.error('usage: tinycld-pkg <typecheck|test|test:e2e|check> [--all] [--bail]')
+        process.exit(2)
+    }
+    const all = rest.includes('--all')
+    const bail = rest.includes('--bail')
+    const { workspaceRoot, appDir, currentPackage } = discover()
+
+    if (all) {
+        const targets = allTargets(workspaceRoot, appDir, verb)
+        const result = await runAll(
+            targets.map(t => t.name),
+            async name => {
+                const pkg = targets.find(t => t.name === name)!
+                console.log(`\n=== ${verb} ${name} ===`)
+                return runForPackage(verb, pkg, appDir)
+            },
+            { bail }
+        )
+        const summary = result.results
+            .map(r => `${r.code === 0 ? '✓' : '✗'} ${r.target}`)
+            .join('  ')
+        console.log(`\n${summary}`)
+        process.exit(result.exitCode)
+    }
+
+    if (!currentPackage) {
+        console.error('Not inside a package or the app shell.')
+        process.exit(2)
+    }
+    const code = await runForPackage(verb, currentPackage, appDir)
+    process.exit(code)
+}
+
+main()
