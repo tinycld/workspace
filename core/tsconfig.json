@@ -1,7 +1,9 @@
 {
     "compilerOptions": {
         "paths": {
-            "~/*": ["./*"]
+            "~/*": ["./*"],
+            "@tinycld/core": ["./index.ts"],
+            "@tinycld/core/*": ["./*"]
         },
         "allowJs": true,
         "esModuleInterop": true,
