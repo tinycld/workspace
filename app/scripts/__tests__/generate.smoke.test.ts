@@ -29,5 +29,16 @@ describe('generate.ts (smoke, real workspace)', () => {
         )
         expect(css).toContain('@source')
         expect(css).toContain('contacts')
+
+        // tinycld.seeds.ts
+        expect(fs.existsSync(path.join(APP_DIR, 'tinycld.seeds.ts'))).toBe(true)
+        expect(fs.readFileSync(path.join(APP_DIR, 'tinycld.seeds.ts'), 'utf8')).toContain(
+            'tinycldSeeds'
+        )
+
+        // the @tinycld/app-generated/tinycld-config re-export shim (core imports through it)
+        const shim = path.join(APP_DIR, 'lib', 'generated', 'tinycld-config.ts')
+        expect(fs.existsSync(shim)).toBe(true)
+        expect(fs.readFileSync(shim, 'utf8')).toContain("export * from '../../tinycld.config'")
     })
 })
