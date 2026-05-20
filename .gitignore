@@ -21,6 +21,7 @@ app/dist/
 # Playwright
 playwright-report/
 test-results/
+app/tmp/
 
 # Spike scratch
 spike2/
