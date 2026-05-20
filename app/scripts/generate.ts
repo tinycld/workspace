@@ -59,10 +59,14 @@ async function main() {
     )
 
     // --- 3. routes ----------------------------------------------------------
-    cleanDir(ROUTES_BASE)
+    // Do NOT cleanDir(ROUTES_BASE) — app-owned files live here (_layout.tsx,
+    // index.tsx, settings/**). Clean only each linked package's own slug dir.
+    fs.mkdirSync(ROUTES_BASE, { recursive: true })
     const appAppDir = path.join(APP_DIR, 'app')
     for (const f of features) {
         if (f.manifest.routes?.directory) {
+            const slugDir = path.join(ROUTES_BASE, f.manifest.slug)
+            if (fs.existsSync(slugDir)) fs.rmSync(slugDir, { recursive: true, force: true })
             const routesDir = resolveExportDir(f.dir, f.manifest.routes.directory)
             if (routesDir) {
                 emitRoutes({
