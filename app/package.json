@@ -5,6 +5,7 @@
     "type": "module",
     "main": "expo-router/entry",
     "scripts": {
+        "packages:generate": "tsx scripts/generate.ts",
         "export:web": "expo export --platform web",
         "export:ios": "expo export --platform ios",
         "export:android": "expo export --platform android"
