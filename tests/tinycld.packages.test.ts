@@ -34,7 +34,7 @@ describe('getPackages (new layout)', () => {
         resetPackagesCache()
     })
     afterEach(() => {
-        process.env.TINYCLD_WS_ROOT = undefined
+        delete process.env.TINYCLD_WS_ROOT
         fs.rmSync(root, { recursive: true, force: true })
     })
 
