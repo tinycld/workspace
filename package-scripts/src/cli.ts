@@ -24,6 +24,10 @@ function commandsFor(verb: Verb, pkg: CurrentPackage, appDir: string): Command[]
             return [buildE2eCommand(pkg, appDir)]
         case 'check':
             return buildCheckCommands(pkg, appDir)
+        default:
+            throw new Error(
+                `Unknown verb '${verb}'. Use one of: typecheck | test | test:e2e | check`
+            )
     }
 }
 
