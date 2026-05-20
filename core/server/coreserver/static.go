@@ -44,27 +44,24 @@ func DefaultReleasesDir() string {
 }
 
 // DefaultTypesDir returns the default location the server writes generated
-// pbSchema.ts / pbZodSchema.ts to. Writes into core's types/ alongside
-// app-generated.d.ts.
+// pbSchema.ts / pbZodSchema.ts to. In the standalone-member layout core is its
+// own workspace member ( <workspace>/core ) and the app shell's binary lives at
+// <workspace>/app/server/app, so core's types/ is two levels up from the
+// binary dir and into the sibling core member: app/server → ../../core/types.
 //
-// We probe two layouts: the binary may live next to a `packages/` tree
-// (the runtime image, where /app/tinycld + /app/packages/) or in
-// `server/tinycld` next to a sibling `packages/` (the dev source tree
-// before the binary is moved into place). For `go run` invocations the
-// cwd is the source tree and we use the relative path directly.
+// TINYCLD_TYPES_DIR overrides this (CI/tests scanning a non-standard tree).
 func DefaultTypesDir() string {
-	const subpath = "packages/@tinycld/core/types"
+	if env := os.Getenv("TINYCLD_TYPES_DIR"); env != "" {
+		return env
+	}
 	dir := binaryDir()
 	if dir == "" {
-		return filepath.Join("..", subpath)
+		// `go run` / temp-built binary: cwd is the app dir (app/server's parent
+		// is app/, whose sibling is core/). Resolve relative to cwd's parent.
+		return filepath.Join("..", "core", "types")
 	}
-	// Runtime image: /app/tinycld → /app/packages/@tinycld/core/types
-	adjacent := filepath.Join(dir, subpath)
-	if _, err := os.Stat(filepath.Dir(adjacent)); err == nil {
-		return adjacent
-	}
-	// Dev source tree: /app/server/tinycld → /app/packages/@tinycld/core/types
-	return filepath.Join(dir, "..", subpath)
+	// Binary at <ws>/app/server/app → <ws>/core/types
+	return filepath.Join(dir, "..", "..", "core", "types")
 }
 
 // StaticWithFallback serves static files from dir, falling back to

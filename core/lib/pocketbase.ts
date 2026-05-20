@@ -234,14 +234,13 @@ const notifications = newCollection('notifications', {
 })
 export const notificationsCollection = notifications
 
-// Shared across every package's comments table. Clients never read
-// these rows directly (listRule/viewRule are null server-side); the
-// store is here so packages can `useStore('comment_mentions').insert`
-// through the comment-mutations factory.
-const comment_mentions = newCollection('comment_mentions', {
-    omitOnInsert: ['created'],
-    ...indexing,
-})
+// NOTE: the `comment_mentions` store registration was removed in the new
+// standalone-core layout because the collection is created by a feature
+// package's migration (drive's create_comment_mentions), not core's own — so
+// core can't unconditionally register it when that package isn't linked. The
+// comment-mutations factory takes the collection as a parameter, so nothing in
+// core hard-depends on a core-owned store here. Re-introducing comments as a
+// first-class core feature (with its own migration) is tracked as a follow-up.
 
 const coreStores = {
     users,
@@ -257,7 +256,6 @@ const coreStores = {
     audit_logs,
     pkg_install_log,
     notifications,
-    comment_mentions,
 }
 export type CoreStores = typeof coreStores
 
