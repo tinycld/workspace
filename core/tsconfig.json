@@ -35,5 +35,5 @@
     "typeAcquisition": {
         "enable": true
     },
-    "include": ["**/*.ts", "**/*.tsx", "expo-env.d.ts"]
+    "include": ["**/*.ts", "**/*.tsx", "expo-env.d.ts", "../app/uniwind-types.d.ts"]
 }
