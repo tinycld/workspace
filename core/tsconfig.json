@@ -1,0 +1,37 @@
+{
+    "compilerOptions": {
+        "paths": {
+            "~/*": ["./*"]
+        },
+        "allowJs": true,
+        "esModuleInterop": true,
+        "jsx": "react-jsx",
+        "lib": ["DOM", "ESNext"],
+        "module": "preserve",
+        "moduleDetection": "force",
+        "moduleResolution": "bundler",
+        "customConditions": ["react-native"],
+        "noEmit": true,
+        "resolveJsonModule": true,
+        "skipLibCheck": true,
+        "target": "ESNext",
+        "strict": true,
+        "rootDir": ".",
+        "preserveSymlinks": true,
+        "noImplicitAny": false,
+        "types": ["node", "react"]
+    },
+    "exclude": [
+        "node_modules",
+        ".expo",
+        "**/test",
+        "**/dist",
+        "node_modules/**/types",
+        "**/__tests__",
+        "ideas"
+    ],
+    "typeAcquisition": {
+        "enable": true
+    },
+    "include": ["**/*.ts", "**/*.tsx", "expo-env.d.ts"]
+}

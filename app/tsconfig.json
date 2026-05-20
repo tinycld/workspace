@@ -1,0 +1,20 @@
+{
+    "extends": "expo/tsconfig.base",
+    "compilerOptions": {
+        "strict": true,
+        "rootDir": ".",
+        "module": "Preserve",
+        "moduleResolution": "Bundler",
+        "skipLibCheck": true,
+        "jsx": "react-jsx",
+        "noImplicitAny": false,
+        "types": ["node", "react"],
+        "lib": ["dom", "esnext"],
+        "paths": {
+            "~/*": ["./*"],
+            "@tinycld/app-generated/*": ["./lib/generated/*"]
+        }
+    },
+    "exclude": ["node_modules", ".expo", "dist"],
+    "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]
+}
