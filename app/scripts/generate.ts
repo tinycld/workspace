@@ -61,11 +61,22 @@ async function main() {
     // --- 3. routes ----------------------------------------------------------
     // Do NOT cleanDir(ROUTES_BASE) — app-owned files live here (_layout.tsx,
     // index.tsx, settings/**). Clean only each linked package's own slug dir.
+    // KNOWN TRADEOFF: a package unlinked since the last run leaves an orphan
+    // ROUTES_BASE/<old-slug>/ dir behind (the old full-wipe removed those). Fine
+    // while the linked set is stable; revisit (e.g. a generated-slugs manifest)
+    // if packages get unlinked frequently.
     fs.mkdirSync(ROUTES_BASE, { recursive: true })
     const appAppDir = path.join(APP_DIR, 'app')
     for (const f of features) {
         if (f.manifest.routes?.directory) {
-            const slugDir = path.join(ROUTES_BASE, f.manifest.slug)
+            const slug = f.manifest.slug
+            // Guard: slug must be a plain segment (no traversal) so the rmSync
+            // below can't escape ROUTES_BASE. Slugs come from trusted manifests,
+            // but this matches cleanDir's defensive posture for a destructive op.
+            if (slug.includes('/') || slug.includes('..') || path.isAbsolute(slug)) {
+                throw new Error(`[generate] invalid package slug '${slug}' — refusing to clean`)
+            }
+            const slugDir = path.join(ROUTES_BASE, slug)
             if (fs.existsSync(slugDir)) fs.rmSync(slugDir, { recursive: true, force: true })
             const routesDir = resolveExportDir(f.dir, f.manifest.routes.directory)
             if (routesDir) {
