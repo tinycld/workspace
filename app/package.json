@@ -9,6 +9,13 @@
         "dev": "tsx scripts/dev.ts",
         "db:reset": "tsx scripts/reset-dev-db.ts",
         "db:seed": "tsx scripts/seed-db.ts",
+        "typecheck": "tinycld-pkg typecheck",
+        "test": "tinycld-pkg test",
+        "test:e2e": "tinycld-pkg test:e2e",
+        "check": "tinycld-pkg check",
+        "pkg:test:unit": "tinycld-pkg test --all",
+        "pkg:check": "tinycld-pkg check --all",
+        "pkg:test:e2e": "tinycld-pkg test:e2e --all",
         "export:web": "expo export --platform web",
         "export:ios": "expo export --platform ios",
         "export:android": "expo export --platform android"
@@ -149,6 +156,7 @@
         "local-ssl-proxy": "^2.0.5",
         "tailwindcss": "^4.2.2",
         "tsx": "^4.21.0",
-        "vitest": "^3.0.0"
+        "vitest": "^3.0.0",
+        "@tinycld/package-scripts": "*"
     }
 }

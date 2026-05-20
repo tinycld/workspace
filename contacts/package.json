@@ -15,7 +15,13 @@
         "./components/*": "./tinycld/contacts/components/*.tsx"
     },
     "scripts": {
-        "typecheck": "tsc --noEmit --skipLibCheck"
+        "typecheck": "tinycld-pkg typecheck",
+        "test": "tinycld-pkg test",
+        "test:e2e": "tinycld-pkg test:e2e",
+        "check": "tinycld-pkg check"
+    },
+    "devDependencies": {
+        "@tinycld/package-scripts": "*"
     },
     "peerDependencies": {
         "react": ">=19",

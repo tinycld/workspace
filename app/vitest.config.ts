@@ -27,5 +27,8 @@ export default defineConfig({
     test: {
         environment: 'node',
         include: ['tests/**/*.test.{ts,tsx}'],
+        // The app shell has no tests/ of its own yet; self-mode `npm test`
+        // (tinycld-pkg test from app/) must not fail on an empty match.
+        passWithNoTests: true,
     },
 })
