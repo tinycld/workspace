@@ -6,7 +6,8 @@
     "workspaces": [
         "core",
         "contacts",
-        "app"
+        "app",
+        "package-scripts"
     ],
     "scripts": {
         "postinstall": "cd app && npm run packages:generate"

@@ -97,6 +97,7 @@ export default defineConfig({
             'core/**/__tests__/**/*.test.{ts,tsx}',
             'core/**/*.test.{ts,tsx}',
             'app/scripts/**/__tests__/**/*.test.{ts,tsx}',
+            'package-scripts/tests/**/*.test.{ts,tsx}',
         ],
         setupFiles: ['tests/unit-setup.ts'],
     },
