@@ -6,7 +6,7 @@ node_modules/
 app/lib/generated/
 app/tinycld.config.ts
 app/tinycld.seeds.ts
-app/app/a/[orgSlug]/*/
+app/app/a/\[orgSlug\]/*/
 app/app/share/
 app/server/package_extensions.go
 app/server/go.work
