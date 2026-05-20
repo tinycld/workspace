@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { QueryClient } from '@tanstack/react-query'
-import { type MergedSchema, packageStores } from '@tinycld/app-generated/package-collections'
-import type { Orgs, UserOrg, Users } from '@tinycld/core/types/pbSchema'
+import { type MergedPackageSchema, tinycldConfig } from '@tinycld/app-generated/tinycld-config'
+import { buildPackageStores } from '@tinycld/core/lib/packages/derive-stores'
+import type { Orgs, Schema, UserOrg, Users } from '@tinycld/core/types/pbSchema'
 import { BasicIndex, createCollection, createReactProvider, setLogger } from 'pbtsdb'
 import PocketBase, { AsyncAuthStore } from 'pocketbase'
 import { Platform } from 'react-native'
@@ -10,6 +11,13 @@ import { useConnectivityStore } from './stores/connectivity-store'
 import type { UserSession } from './types'
 
 export { eq } from '@tanstack/db'
+
+// MergedSchema = core's Schema intersected with each linked package's schema.
+// MergedPackageSchema is a PRECOMPUTED LITERAL intersection from the generated
+// config (NOT derived from the config values) to avoid a circular type
+// reference through coreStores. buildPackageStores wires stores from the config
+// values at runtime.
+type MergedSchema = Schema & MergedPackageSchema
 
 if (Platform.OS !== 'web') {
     // Only polyfill EventSource on native — the browser has its own
@@ -255,7 +263,7 @@ export type CoreStores = typeof coreStores
 
 const stores = {
     ...coreStores,
-    ...packageStores(newCollection, coreStores),
+    ...buildPackageStores(tinycldConfig, newCollection, coreStores),
 }
 
 const { Provider: PBTSDBProvider, useStore } = createReactProvider(stores)

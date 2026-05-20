@@ -3,7 +3,8 @@
         "paths": {
             "~/*": ["./*"],
             "@tinycld/core": ["./index.ts"],
-            "@tinycld/core/*": ["./*"]
+            "@tinycld/core/*": ["./*"],
+            "@tinycld/app-generated/*": ["../app/lib/generated/*"]
         },
         "allowJs": true,
         "esModuleInterop": true,
@@ -18,7 +19,6 @@
         "skipLibCheck": true,
         "target": "ESNext",
         "strict": true,
-        "rootDir": ".",
         "preserveSymlinks": true,
         "noImplicitAny": false,
         "types": ["node", "react"]

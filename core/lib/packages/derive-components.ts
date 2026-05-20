@@ -1,3 +1,4 @@
+import { tinycldConfig } from '@tinycld/app-generated/tinycld-config'
 import type { ComponentType, LazyExoticComponent, ReactNode } from 'react'
 import type { PackageSettingsPanel } from './config-types'
 
@@ -55,3 +56,7 @@ export function deriveSettings(entries: readonly SettingsEntryLike[]): PackageSe
     }
     return out
 }
+
+export const packageSidebars = deriveSidebars(tinycldConfig)
+export const packageProviders = deriveProviders(tinycldConfig)
+export const packageSettings = deriveSettings(tinycldConfig)
