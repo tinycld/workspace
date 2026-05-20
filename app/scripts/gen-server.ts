@@ -55,16 +55,36 @@ export function buildGoWork(coreRelPath: string, pkgs: ServerPkg[]): string {
     ].join('\n')
 }
 
-// Replace (or create) a symlink at linkPath → target.
+// Replace (or create) a symlink at linkPath → target. Idempotent and safe
+// under concurrent generator runs: if another process recreates the link
+// between our unlink and create (EEXIST), we accept it when it already points
+// at `target`, otherwise we retry the unlink+create once.
 export function replaceSymlink(target: string, linkPath: string) {
-    try {
-        // lstatSync (not existsSync) so a BROKEN existing symlink is still
-        // detected and removed; it throws ENOENT only when nothing is there.
-        fs.lstatSync(linkPath)
-        fs.unlinkSync(linkPath)
-    } catch {
-        // nothing at linkPath — nothing to remove
-    }
     fs.mkdirSync(path.dirname(linkPath), { recursive: true })
-    fs.symlinkSync(target, linkPath)
+    for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+            // lstatSync (not existsSync) so a BROKEN existing symlink is still
+            // detected and removed; it throws ENOENT only when nothing is there.
+            fs.lstatSync(linkPath)
+            fs.unlinkSync(linkPath)
+        } catch {
+            // nothing at linkPath — nothing to remove
+        }
+        try {
+            fs.symlinkSync(target, linkPath)
+            return
+        } catch (err) {
+            if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
+                // A concurrent run recreated it. If it already points where we
+                // want, we're done; otherwise loop to unlink + recreate.
+                try {
+                    if (fs.readlinkSync(linkPath) === target) return
+                } catch {
+                    // unreadable — fall through to retry
+                }
+                continue
+            }
+            throw err
+        }
+    }
 }
