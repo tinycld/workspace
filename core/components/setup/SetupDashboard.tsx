@@ -1,4 +1,4 @@
-import { packageRegistry } from '@tinycld/app-generated/package-registry'
+import { packageRegistry } from '@tinycld/core/lib/packages/static-registry'
 import { deriveUsername } from '@tinycld/core/lib/derive-username'
 import { captureException } from '@tinycld/core/lib/errors'
 import { pb as appPb } from '@tinycld/core/lib/pocketbase'

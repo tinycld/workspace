@@ -1,4 +1,4 @@
-import { packageRegistry } from '@tinycld/app-generated/package-registry'
+import { packageRegistry } from '@tinycld/core/lib/packages/static-registry'
 import { useOrgHref } from '@tinycld/core/lib/org-routes'
 import { type Shortcut, useRegisterShortcuts } from '@tinycld/core/lib/shortcuts'
 import { useShortcutHelp, useShortcutHelpStore } from '@tinycld/core/lib/shortcuts/help'
