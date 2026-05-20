@@ -19,7 +19,7 @@ export function NewVersionToast() {
     return (
         <View
             // position: 'fixed' is web-only; safe under the Platform.OS check.
-            style={{ position: 'fixed', bottom: 16, right: 16, zIndex: 50 }}
+            style={{ position: 'fixed', bottom: 16, right: 16, zIndex: 50 } as object}
             className="rounded-lg bg-accent px-4 py-3 shadow-lg"
         >
             <Pressable onPress={onRefresh} accessibilityRole="button">

@@ -1,6 +1,7 @@
 import { openHelp } from '@tinycld/core/lib/help/open-help'
 import { type HelpSearchResult, searchHelpTopics } from '@tinycld/core/lib/help/search'
 import { useHelpSearchStore } from '@tinycld/core/lib/help/search-store'
+import type { HelpTopicId } from '@tinycld/core/lib/help/types'
 import { useHelpTopics } from '@tinycld/core/lib/help/use-help-topics'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { type ReactNode, type RefObject, useEffect, useMemo, useRef } from 'react'
@@ -150,7 +151,7 @@ function PaletteOverlay({ children }: { children: ReactNode }) {
                 alignItems: 'center',
                 paddingTop: PALETTE_TOP_OFFSET_PX,
                 zIndex: 1000,
-            }}
+            } as object}
             pointerEvents="box-none"
         >
             {children}
@@ -172,16 +173,16 @@ function PaletteCard({ children }: { children: ReactNode }) {
         'data-tinycld-help-palette': 'true',
         role: 'dialog',
         'aria-label': 'Search help',
-    }
+    } as object
     return (
         <View
-            {...cardDomProps}
+            {...(cardDomProps as Record<string, unknown>)}
             style={{
                 width: PALETTE_WIDTH_PX,
                 maxWidth: '90%',
                 maxHeight: '60vh',
                 ...animationStyle,
-            }}
+            } as object}
             className="rounded-xl border border-border bg-background shadow-lg overflow-hidden"
         >
             {children}
@@ -217,7 +218,7 @@ interface ResultListProps {
     results: HelpSearchResult[]
     query: string
     selectedIndex: number
-    onPick: (topicId: string) => void
+    onPick: (topicId: HelpTopicId) => void
     onHover: (index: number) => void
 }
 
