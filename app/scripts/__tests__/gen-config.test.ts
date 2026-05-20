@@ -48,6 +48,44 @@ describe('buildConfigSource', () => {
         const src = buildConfigSource([{ ...contacts, slug: 'google-takeout-import', schemaType: 'GtiSchema', packageName: '@tinycld/google-takeout-import' }])
         expect(src).toContain('as googleTakeoutImportRegister')
     })
+
+    it('emits provider import + entry for hasProvider packages', () => {
+        const withProvider: ConfigPkg = {
+            packageName: '@tinycld/drive',
+            slug: 'drive',
+            schemaType: 'DriveSchema',
+            hasRegister: true,
+            hasSidebar: false,
+            hasProvider: true,
+            hasSeed: false,
+            settings: [],
+            manifest: { name: 'Drive', slug: 'drive', version: '0.1.0', description: 'd' },
+        }
+        const src = buildConfigSource([withProvider])
+        expect(src).toContain("import driveProvider from '@tinycld/drive/provider'")
+        expect(src).toContain('provider: driveProvider,')
+    })
+
+    it('joins multiple package schemas into the MergedPackageSchema intersection', () => {
+        const mail: ConfigPkg = {
+            packageName: '@tinycld/mail',
+            slug: 'mail',
+            schemaType: 'MailSchema',
+            hasRegister: true,
+            hasSidebar: false,
+            hasProvider: false,
+            hasSeed: false,
+            settings: [],
+            manifest: { name: 'Mail', slug: 'mail', version: '0.1.0', description: 'd' },
+        }
+        const src = buildConfigSource([contacts, mail])
+        expect(src).toContain('export type MergedPackageSchema = ContactsSchema & MailSchema')
+    })
+
+    it('throws when hasRegister is true but schemaType is empty', () => {
+        const bad: ConfigPkg = { ...contacts, schemaType: '' }
+        expect(() => buildConfigSource([bad])).toThrow(/schemaType is empty/)
+    })
 })
 
 describe('buildSeedsSource', () => {
