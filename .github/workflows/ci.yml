@@ -1,0 +1,26 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install (workspace root)
+        # postinstall runs the generator (cd app && npm run packages:generate),
+        # materializing tinycld.config.ts + the app-generated/* shims that the
+        # typecheck depends on.
+        run: npm install
+      - name: Typecheck + unit (all members)
+        run: cd app && npm run pkg:check
+
+# NOTE: Go tests (go test ./...) and the live e2e (npm run test:e2e) need a Go
+# toolchain + a booted Expo/PB stack + a browser; they belong in separate CI
+# lanes added later. This lane is the fast gate: typecheck + unit across every
+# workspace member, mirroring `cd app && npm run pkg:check` exactly.
