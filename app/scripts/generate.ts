@@ -21,6 +21,11 @@ function resolveExportDir(packageDir: string, subpath: string): string | null {
 }
 
 function cleanDir(dir: string) {
+    // Safety: only ever rm -rf a routes dir under app/a/. Guards against a
+    // misconfigured APP_DIR turning this into a destructive rm of the wrong tree.
+    if (!dir.includes(path.join('app', 'a'))) {
+        throw new Error(`cleanDir refused: ${dir} is not under app/a/`)
+    }
     if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true })
     fs.mkdirSync(dir, { recursive: true })
 }
@@ -67,6 +72,10 @@ async function main() {
                     importSubpath: f.manifest.routes.directory,
                     routesBase: ROUTES_BASE,
                 })
+            } else {
+                console.warn(
+                    `[generate] ${f.name}: no exports entry for './${f.manifest.routes.directory}/*' — routes skipped`
+                )
             }
         }
         if (f.manifest.publicRoutes?.directory) {
@@ -79,6 +88,10 @@ async function main() {
                     importSubpath: f.manifest.publicRoutes.directory,
                     appDir: appAppDir,
                 })
+            } else {
+                console.warn(
+                    `[generate] ${f.name}: no exports entry for './${f.manifest.publicRoutes.directory}/*' — public routes skipped`
+                )
             }
         }
     }
