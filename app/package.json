@@ -9,6 +9,7 @@
         "dev": "tsx scripts/dev.ts",
         "db:reset": "tsx scripts/reset-dev-db.ts",
         "db:seed": "tsx scripts/seed-db.ts",
+        "expo:test": "tsx scripts/reset-dev-db.ts --url http://127.0.0.1:7299 --data-dir server/pb_test_data && tsx scripts/dev.ts --no-ssl --port 7200 --pb-data-dir server/pb_test_data",
         "typecheck": "tinycld-pkg typecheck",
         "test": "tinycld-pkg test",
         "test:e2e": "tinycld-pkg test:e2e",

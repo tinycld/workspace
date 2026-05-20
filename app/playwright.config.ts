@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { defineConfig, devices } from '@playwright/test'
 
 // App shell owns the canonical Playwright config: the webServer (the real dev
@@ -23,5 +24,8 @@ export default defineConfig({
         reuseExistingServer: !process.env.CI,
         timeout: 240_000,
     },
-    globalSetup: './tests/playwright-global-setup.ts',
+    // Absolute path: per-package configs spread this config, and Playwright
+    // resolves a relative globalSetup against the INHERITING config's dir —
+    // so a relative './tests/...' would break for contacts/etc. Pin it here.
+    globalSetup: path.join(import.meta.dirname, 'tests', 'playwright-global-setup.ts'),
 })
