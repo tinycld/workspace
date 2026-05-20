@@ -1,4 +1,4 @@
-import { packageProviders } from '@tinycld/app-generated/package-providers'
+import { packageProviders } from '@tinycld/core/lib/packages/derive-components'
 import type { ComponentType, ReactNode } from 'react'
 
 const stableProviderChain: ComponentType<{ children: ReactNode }>[] = Object.values(

@@ -1,4 +1,4 @@
-import { packageSidebars } from '@tinycld/app-generated/package-sidebars'
+import { packageSidebars } from '@tinycld/core/lib/packages/derive-components'
 import { usePackage } from '@tinycld/core/lib/packages/use-packages'
 import { useWorkspaceStore } from '@tinycld/core/lib/stores/workspace-store'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
