@@ -4,7 +4,7 @@ import * as path from 'node:path'
 // New flat layout: every package (core, app, features) is a direct member dir
 // under the workspace root. core is the member whose package.json name is
 // "@tinycld/core" (it has no manifest.ts). Feature members are dirs with a
-// manifest.ts. The app shell (name "app", no manifest.ts) is excluded.
+// manifest.ts. Members without a manifest.ts are excluded (this includes the app shell).
 //
 // TINYCLD_WS_ROOT overrides the workspace root for tests that scan a fake tree.
 // It is resolved at call time (not module load) so that tests can set it in
