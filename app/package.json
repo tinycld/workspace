@@ -6,6 +6,9 @@
     "main": "expo-router/entry",
     "scripts": {
         "packages:generate": "tsx scripts/generate.ts",
+        "dev": "tsx scripts/dev.ts",
+        "db:reset": "tsx scripts/reset-dev-db.ts",
+        "db:seed": "tsx scripts/seed-db.ts",
         "export:web": "expo export --platform web",
         "export:ios": "expo export --platform ios",
         "export:android": "expo export --platform android"
