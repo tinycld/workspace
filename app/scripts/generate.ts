@@ -6,8 +6,9 @@ import { buildConfigSource, buildSeedsSource, type ConfigPkg } from './gen-confi
 import { buildHelpSource, type HelpGroupInput, parseFrontmatter } from './gen-help'
 import { emitPublicRoutes, emitRoutes } from './gen-routes'
 import { buildUniwindSources, type UniwindSource } from './gen-uniwind'
+import { buildGoWork, buildPackageExtensionsGo, replaceSymlink, type ServerPkg } from './gen-server'
 import { loadManifest, type PackageManifest } from './load-manifest'
-import { APP_DIR, GENERATED_DIR, ROUTES_BASE, memberDir } from './paths'
+import { APP_DIR, GENERATED_DIR, ROUTES_BASE, SERVER_DIR, MIGRATIONS_DIR, HOOKS_DIR, memberDir } from './paths'
 
 // Resolve a package.json exports subpath to a directory relative to packageDir.
 // e.g. exports['./screens/*'] === './tinycld/contacts/screens/*.tsx'
@@ -23,8 +24,8 @@ function resolveExportDir(packageDir: string, subpath: string): string | null {
 function cleanDir(dir: string) {
     // Safety: only ever rm -rf a routes dir under app/a/. Guards against a
     // misconfigured APP_DIR turning this into a destructive rm of the wrong tree.
-    if (!dir.includes(path.join('app', 'a'))) {
-        throw new Error(`cleanDir refused: ${dir} is not under app/a/`)
+    if (!dir.includes(path.join('app', 'a')) && !dir.includes(path.join('app', 'server'))) {
+        throw new Error(`cleanDir refused: ${dir} is not under app/a/ or app/server/`)
     }
     if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true })
     fs.mkdirSync(dir, { recursive: true })
@@ -137,6 +138,63 @@ async function main() {
         path.join(GENERATED_DIR, 'uniwind-sources.css'),
         buildUniwindSources(uniwindSources)
     )
+
+    // --- 6. server: migration + hook symlinks ------------------------------
+    fs.mkdirSync(SERVER_DIR, { recursive: true })
+    cleanDir(MIGRATIONS_DIR)
+    cleanDir(HOOKS_DIR)
+    // core migrations first (core has no manifest; include explicitly)
+    const coreMig = path.join(memberDir('@tinycld/core'), 'server', 'pb_migrations')
+    if (fs.existsSync(coreMig)) {
+        for (const file of fs.readdirSync(coreMig)) {
+            replaceSymlink(path.join(coreMig, file), path.join(MIGRATIONS_DIR, file))
+        }
+    }
+    for (const f of features) {
+        if (f.manifest.migrations?.directory) {
+            const dir = path.join(f.dir, f.manifest.migrations.directory)
+            if (fs.existsSync(dir)) {
+                for (const file of fs.readdirSync(dir)) {
+                    replaceSymlink(path.join(dir, file), path.join(MIGRATIONS_DIR, file))
+                }
+            }
+        }
+        if (f.manifest.hooks?.directory) {
+            const dir = path.join(f.dir, f.manifest.hooks.directory)
+            if (fs.existsSync(dir)) {
+                for (const file of fs.readdirSync(dir)) {
+                    replaceSymlink(path.join(dir, file), path.join(HOOKS_DIR, file))
+                }
+            }
+        }
+    }
+
+    // --- 7. server: Go wiring (package_extensions.go + go.work) ------------
+    const serverPkgs: ServerPkg[] = features
+        .filter(
+            f =>
+                f.manifest.server?.package &&
+                fs.existsSync(path.join(f.dir, f.manifest.server.package))
+        )
+        .map(f => ({
+            slug: f.manifest.slug,
+            module: f.manifest.server!.module,
+            serverRelPath: path.relative(
+                SERVER_DIR,
+                path.join(f.dir, f.manifest.server!.package)
+            ),
+        }))
+    fs.writeFileSync(
+        path.join(SERVER_DIR, 'package_extensions.go'),
+        buildPackageExtensionsGo(serverPkgs)
+    )
+    const coreServerRel = path.relative(SERVER_DIR, path.join(memberDir('@tinycld/core'), 'server'))
+    if (serverPkgs.length > 0) {
+        fs.writeFileSync(path.join(SERVER_DIR, 'go.work'), buildGoWork(coreServerRel, serverPkgs))
+    } else {
+        const gw = path.join(SERVER_DIR, 'go.work')
+        if (fs.existsSync(gw)) fs.unlinkSync(gw)
+    }
 
     console.log(`Generated config for ${features.length} feature package(s).`)
 }
