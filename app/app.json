@@ -1,0 +1,27 @@
+{
+    "expo": {
+        "name": "TinyCldSpike",
+        "slug": "tinycld-spike",
+        "scheme": "tinycldspike",
+        "platforms": ["ios", "android", "web"],
+        "userInterfaceStyle": "automatic",
+        "plugins": [
+            [
+                "expo-router",
+                {
+                    "asyncRoutes": {
+                        "web": "production",
+                        "default": false
+                    }
+                }
+            ]
+        ],
+        "web": {
+            "bundler": "metro",
+            "output": "single"
+        },
+        "experiments": {
+            "typedRoutes": false
+        }
+    }
+}
