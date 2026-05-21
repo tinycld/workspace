@@ -63,11 +63,23 @@ export function registerCollections(
         },
     })
 
+    // Drive owns the comment_mentions migration. Registering the store
+    // here makes `useStore('comment_mentions')` available to any package
+    // that depends on drive (text, calc-comments, …).
+    const comment_mentions = newCollection('comment_mentions', {
+        omitOnInsert: ['created'] as const,
+        expand: {
+            drive_item: drive_items,
+            mentioned_user_org: coreStores.user_org,
+        },
+    })
+
     return {
         drive_items,
         drive_shares,
         drive_item_state,
         drive_item_versions,
         drive_share_links,
+        comment_mentions,
     }
 }

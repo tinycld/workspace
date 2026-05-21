@@ -1,5 +1,5 @@
 import type { FileCategory } from '@tinycld/core/file-viewer/file-icons'
-import type { Orgs, UserOrg } from '@tinycld/core/types/pbSchema'
+import type { CommentMentions, Orgs, UserOrg } from '@tinycld/core/types/pbSchema'
 
 export type { FileCategory }
 
@@ -135,6 +135,13 @@ export type DriveSchema = {
         relations: {
             item: DriveItems
             created_by: UserOrg
+        }
+    }
+    comment_mentions: {
+        type: CommentMentions
+        relations: {
+            drive_item: DriveItems
+            mentioned_user_org: UserOrg
         }
     }
 }
