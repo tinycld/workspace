@@ -4,7 +4,7 @@ import * as path from 'node:path'
 export interface CurrentPackage {
     dir: string
     name: string
-    kind: 'feature' | 'app'
+    kind: 'feature' | 'app' | 'core'
 }
 export interface Discovery {
     workspaceRoot: string
@@ -21,7 +21,9 @@ function readName(dir: string): string | null {
 }
 
 function hasManifest(dir: string): boolean {
-    return fs.existsSync(path.join(dir, 'manifest.ts')) || fs.existsSync(path.join(dir, 'manifest.js'))
+    return (
+        fs.existsSync(path.join(dir, 'manifest.ts')) || fs.existsSync(path.join(dir, 'manifest.js'))
+    )
 }
 
 // Resolve the real path of the nearest existing ancestor.
@@ -67,7 +69,9 @@ function findAppDir(workspaceRoot: string): string {
 }
 
 // The current scope target = nearest ancestor of cwd that is a feature package
-// (has manifest.ts) or the app shell (name "app").
+// (has manifest.ts), the app shell (name "app"), or core (name "@tinycld/core").
+// core, like the app shell, has no manifest.ts — it's the shared lib, not a
+// feature — so it's matched by name.
 function findCurrentPackage(start: string, appDir: string): CurrentPackage | null {
     let dir = realpathExisting(start)
     const root = path.dirname(appDir) // workspace root
@@ -75,6 +79,7 @@ function findCurrentPackage(start: string, appDir: string): CurrentPackage | nul
         if (fs.existsSync(path.join(dir, 'package.json'))) {
             const name = readName(dir)
             if (dir === appDir && name === 'app') return { dir, name, kind: 'app' }
+            if (name === '@tinycld/core') return { dir, name, kind: 'core' }
             if (hasManifest(dir) && name) return { dir, name, kind: 'feature' }
         }
         const parent = path.dirname(dir)
