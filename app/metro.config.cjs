@@ -11,16 +11,6 @@ const config = getDefaultConfig(__dirname)
 const workspaceRoot = path.resolve(__dirname, '..')
 config.watchFolders = [workspaceRoot]
 
-// Members (core/, siblings) have no node_modules of their own and Metro's
-// hierarchical lookup from a member's real path (e.g. new/core/ui/…) walks up
-// only within that member, never reaching the workspace-root node_modules where
-// the hoisted deps live. Make the resolver consult BOTH the app's and the
-// workspace root's node_modules explicitly (the canonical Metro-monorepo fix).
-config.resolver.nodeModulesPaths = [
-    path.join(__dirname, 'node_modules'),
-    path.join(workspaceRoot, 'node_modules'),
-]
-
 // `@tinycld/app-generated/*` — package-generator output written to
 // lib/generated/. This is a build-time contract (not a symlink artifact):
 // @tinycld/core imports these virtual modules by name and the app supplies
