@@ -1,0 +1,5 @@
+node_modules/
+*.tsbuildinfo
+.DS_Store
+# Per-developer Claude Code workspace (session worktrees, scratch files).
+.claude/
