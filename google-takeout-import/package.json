@@ -1,0 +1,32 @@
+{
+    "name": "@tinycld/google-takeout-import",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "exports": {
+        "./package.json": "./package.json",
+        "./manifest": "./manifest.ts",
+        "./types": "./tinycld/google-takeout-import/types.ts",
+        "./hooks/*": "./tinycld/google-takeout-import/hooks/*.ts",
+        "./components/*": "./tinycld/google-takeout-import/components/*.tsx",
+        "./settings/*": "./tinycld/google-takeout-import/settings/*.tsx",
+        "./lib/*": "./tinycld/google-takeout-import/lib/*.ts"
+    },
+    "scripts": {
+        "typecheck": "tinycld-pkg typecheck",
+        "test": "tinycld-pkg test",
+        "test:e2e": "tinycld-pkg test:e2e",
+        "check": "tinycld-pkg check"
+    },
+    "devDependencies": {
+        "@tinycld/package-scripts": "*"
+    },
+    "peerDependencies": {
+        "react": ">=19",
+        "react-native": ">=0.83",
+        "expo-router": ">=55.0.0",
+        "pbtsdb": ">=0.5",
+        "@tanstack/react-db": ">=0.1",
+        "@tanstack/db": ">=0.6"
+    }
+}
