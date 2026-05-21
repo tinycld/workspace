@@ -1,19 +1,19 @@
 {
-    "name": "tinycld-spike-workspace",
+    "name": "@tinycld/workspace",
     "version": "0.0.0",
     "private": true,
     "type": "module",
     "workspaces": [
-        "core",
-        "contacts",
         "app",
+        "core",
         "package-scripts",
-        "google-takeout-import",
-        "calendar",
+        "contacts",
         "mail",
+        "calendar",
         "drive",
         "calc",
-        "text"
+        "text",
+        "google-takeout-import"
     ],
     "scripts": {
         "postinstall": "cd app && npm run packages:generate && npm run assets:copy-pdfjs"
