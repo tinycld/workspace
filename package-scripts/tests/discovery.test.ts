@@ -7,7 +7,10 @@ import { discover } from '../src/discovery'
 // Build a fake workspace: <ws>/{app,contacts,core} with app named "app".
 function makeWs(): string {
     const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'tcld-disc-'))
-    fs.writeFileSync(path.join(ws, 'package.json'), JSON.stringify({ workspaces: ['app', 'contacts', 'core'] }))
+    fs.writeFileSync(
+        path.join(ws, 'package.json'),
+        JSON.stringify({ workspaces: ['app', 'contacts', 'core'] })
+    )
     for (const [dir, name, manifest] of [
         ['app', 'app', false],
         ['contacts', '@tinycld/contacts', true],
@@ -22,7 +25,9 @@ function makeWs(): string {
 
 describe('discover', () => {
     let ws: string
-    beforeEach(() => { ws = makeWs() })
+    beforeEach(() => {
+        ws = makeWs()
+    })
     afterEach(() => fs.rmSync(ws, { recursive: true, force: true }))
 
     it('finds the workspace root from a nested cwd', () => {
