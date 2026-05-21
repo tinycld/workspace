@@ -1,0 +1,42 @@
+{
+    "name": "@tinycld/drive",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "exports": {
+        "./package.json": "./package.json",
+        "./manifest": "./manifest.ts",
+        "./types": "./tinycld/drive/types.ts",
+        "./collections": "./tinycld/drive/collections.ts",
+        "./screens/*": "./tinycld/drive/screens/*.tsx",
+        "./sidebar": "./tinycld/drive/sidebar.tsx",
+        "./provider": "./tinycld/drive/provider.tsx",
+        "./seed": "./tinycld/drive/seed.ts",
+        "./hooks/*": "./tinycld/drive/hooks/*.ts",
+        "./components/*": "./tinycld/drive/components/*.tsx",
+        "./stores/*": "./tinycld/drive/stores/*.ts",
+        "./lib/copy-drive-item": "./tinycld/drive/lib/copy-drive-item.ts",
+        "./lib/item-actions-registry": "./tinycld/drive/lib/item-actions-registry.ts",
+        "./lib/save-to-drive": "./tinycld/drive/lib/save-to-drive.ts",
+        "./lib/save-to-drive-action": "./tinycld/drive/lib/save-to-drive-action.tsx",
+        "./lib/upload-to-drive": "./tinycld/drive/lib/upload-to-drive.ts",
+        "./public-screens/*": "./tinycld/drive/public-screens/*.tsx"
+    },
+    "scripts": {
+        "typecheck": "tinycld-pkg typecheck",
+        "test": "tinycld-pkg test",
+        "test:e2e": "tinycld-pkg test:e2e",
+        "check": "tinycld-pkg check"
+    },
+    "devDependencies": {
+        "@tinycld/package-scripts": "*"
+    },
+    "peerDependencies": {
+        "react": ">=19",
+        "react-native": ">=0.83",
+        "expo-router": ">=55.0.0",
+        "pbtsdb": ">=0.5",
+        "@tanstack/react-db": ">=0.1",
+        "@tanstack/db": ">=0.6"
+    }
+}

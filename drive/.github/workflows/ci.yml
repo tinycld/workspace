@@ -1,0 +1,156 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  APP_REPO: tinycld/tinycld
+  APP_REF: main
+  TEST_USER_LOGIN: user@tinycld.org
+  TEST_USER_PW: TestUser1234!
+  ADMIN_USER_LOGIN: admin@tinycld.org
+  ADMIN_USER_PW: AdminPass1234!
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: drive
+      - uses: actions/checkout@v5
+        with:
+          repository: ${{ env.APP_REPO }}
+          ref: ${{ env.APP_REF }}
+          path: tinycld
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: tinycld/.node-version
+          cache: npm
+          cache-dependency-path: tinycld/package-lock.json
+      - name: Install tinycld deps (biome lives here)
+        working-directory: tinycld
+        run: npm ci
+      - name: Link drive into tinycld so biome scans it
+        working-directory: tinycld
+        run: npm run packages:link ../drive
+      - name: Lint (biome runs from tinycld; scans linked drive via app rules)
+        working-directory: tinycld
+        run: npm run lint
+
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: drive
+      - uses: actions/checkout@v5
+        with:
+          repository: ${{ env.APP_REPO }}
+          ref: ${{ env.APP_REF }}
+          path: tinycld
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: tinycld/.node-version
+          cache: npm
+          cache-dependency-path: tinycld/package-lock.json
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: tinycld/server/go.mod
+          cache-dependency-path: tinycld/server/go.sum
+      - name: Install tinycld deps
+        working-directory: tinycld
+        run: npm ci
+      - name: Link drive into tinycld (so ~/types/pbSchema sees drive collections)
+        working-directory: tinycld
+        run: npm run packages:link ../drive
+      - name: Generate PB schema types
+        working-directory: tinycld
+        run: |
+          cd server && go build -o tinycld .
+          ./tinycld --dev serve &
+          sleep 3
+          kill %1 2>/dev/null || true
+      - name: expose tinycld's node_modules to drive
+        run: ln -s ../tinycld/node_modules drive/node_modules
+      - name: Typecheck drive
+        working-directory: drive
+        env:
+          NODE_OPTIONS: --preserve-symlinks
+        run: npm run typecheck
+
+  test:
+    name: Unit & E2E tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: drive
+      - uses: actions/checkout@v5
+        with:
+          repository: ${{ env.APP_REPO }}
+          ref: ${{ env.APP_REF }}
+          path: tinycld
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: tinycld/.node-version
+          cache: npm
+          cache-dependency-path: tinycld/package-lock.json
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: tinycld/server/go.mod
+          cache-dependency-path: tinycld/server/go.sum
+
+      - name: Install tinycld deps
+        working-directory: tinycld
+        run: npm ci
+
+      - name: Link drive into tinycld
+        working-directory: tinycld
+        run: npm run packages:link ../drive
+
+      - name: Build PocketBase binary
+        working-directory: tinycld/server
+        run: go build -o tinycld .
+
+      - name: Run unit tests (vitest picks up drive via packages glob)
+        working-directory: tinycld
+        run: npx vitest run packages/@tinycld/drive
+
+      - name: Reset test DB
+        working-directory: tinycld
+        run: npx tsx scripts/reset-dev-db.ts --url http://127.0.0.1:7091 --data-dir server/pb_test_data
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ hashFiles('tinycld/package-lock.json') }}
+      - name: Install Playwright browsers
+        working-directory: tinycld
+        run: npx playwright install --with-deps chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+      - name: Install Playwright system deps
+        working-directory: tinycld
+        run: npx playwright install-deps chromium
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+
+      - name: Run Playwright tests (drive project only)
+        working-directory: tinycld
+        env:
+          CI: true
+          NODE_OPTIONS: --preserve-symlinks
+        run: npx playwright test --project "@tinycld/drive" --timeout=90000
+
+      - uses: actions/upload-artifact@v5
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: tinycld/playwright-report/
+          retention-days: 14
