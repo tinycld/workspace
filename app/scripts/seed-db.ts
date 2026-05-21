@@ -1,4 +1,5 @@
 #!/usr/bin/env -S npx tsx
+
 /**
  * Database Seed Script
  *
@@ -29,8 +30,8 @@
  *   --help                 Show this help message
  */
 
-import PocketBase from 'pocketbase'
 import { deriveSeeds } from '@tinycld/core/lib/packages/derive-seeds'
+import PocketBase from 'pocketbase'
 import { tinycldSeeds } from '../tinycld.seeds'
 
 function log(...args: unknown[]) {

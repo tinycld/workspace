@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <style>
+      .bg { fill: #081226; }
+      .cyan-thick { stroke: #00E5FF; stroke-width: 44; stroke-linecap: round; fill: none; }
+      .white-thick { stroke: #FFFFFF; stroke-width: 44; stroke-linecap: round; fill: none; }
+      .teal-thin { stroke: #00B4D8; stroke-width: 20; stroke-linecap: round; fill: none; }
+      .cyan-thin { stroke: #00E5FF; stroke-width: 20; stroke-linecap: round; fill: none; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="512" height="512" rx="114" />
+
+  <g transform="translate(10, 10)">
+    <line x1="170" y1="120" x2="170" y2="180" class="cyan-thick" />
+
+    <line x1="230" y1="140" x2="230" y2="180" class="teal-thin" />
+
+    <line x1="110" y1="240" x2="140" y2="240" class="cyan-thick" />
+
+    <line x1="230" y1="240" x2="380" y2="240" class="white-thick" />
+
+    <path d="M 170 300 L 170 360 Q 170 410 220 410 L 330 410" class="white-thick" />
+
+    <path d="M 210 460 L 300 460" class="teal-thin" />
+
+    <path d="M 120 290 L 120 370 Q 120 440 180 440" class="cyan-thin" />
+  </g>
+</svg>

@@ -21,14 +21,23 @@ const takeout: ConfigPkg = {
     hasProvider: false,
     hasSeed: false,
     settings: [{ slug: 'google-takeout', label: 'Import', component: 'settings/takeout' }],
-    manifest: { name: 'Takeout', slug: 'google-takeout-import', version: '0.1.0', description: 'd' },
+    manifest: {
+        name: 'Takeout',
+        slug: 'google-takeout-import',
+        version: '0.1.0',
+        description: 'd',
+    },
 }
 
 describe('buildConfigSource', () => {
     it('emits a definePackageEntry array with imports and a MergedPackageSchema', () => {
         const src = buildConfigSource([contacts])
-        expect(src).toContain("import { definePackageEntry } from '@tinycld/core/lib/packages/config-types'")
-        expect(src).toContain("import { registerCollections as contactsRegister } from '@tinycld/contacts/collections'")
+        expect(src).toContain(
+            "import { definePackageEntry } from '@tinycld/core/lib/packages/config-types'"
+        )
+        expect(src).toContain(
+            "import { registerCollections as contactsRegister } from '@tinycld/contacts/collections'"
+        )
         expect(src).toContain("import type { ContactsSchema } from '@tinycld/contacts/types'")
         expect(src).toContain('definePackageEntry<ContactsSchema>()({')
         expect(src).toContain('registerCollections: contactsRegister,')
@@ -39,13 +48,22 @@ describe('buildConfigSource', () => {
     it('handles settings-only packages (no register) with Record<string, never>', () => {
         const src = buildConfigSource([takeout])
         expect(src).toContain('definePackageEntry<Record<string, never>>()({')
-        expect(src).toContain("Component: lazy(() => import('@tinycld/google-takeout-import/settings/takeout'))")
+        expect(src).toContain(
+            "Component: lazy(() => import('@tinycld/google-takeout-import/settings/takeout'))"
+        )
         // No schema in the merge → MergedPackageSchema falls back to Record<string, never>
         expect(src).toContain('export type MergedPackageSchema = Record<string, never>')
     })
 
     it('camelCases slugs for identifiers', () => {
-        const src = buildConfigSource([{ ...contacts, slug: 'google-takeout-import', schemaType: 'GtiSchema', packageName: '@tinycld/google-takeout-import' }])
+        const src = buildConfigSource([
+            {
+                ...contacts,
+                slug: 'google-takeout-import',
+                schemaType: 'GtiSchema',
+                packageName: '@tinycld/google-takeout-import',
+            },
+        ])
         expect(src).toContain('as googleTakeoutImportRegister')
     })
 
@@ -93,6 +111,8 @@ describe('buildSeedsSource', () => {
         const src = buildSeedsSource([contacts, takeout])
         expect(src).toContain("import contactsSeed from '@tinycld/contacts/seed'")
         expect(src).not.toContain('takeout')
-        expect(src).toContain('{ manifest: { slug: "contacts", dependencies: [] }, seed: contactsSeed },')
+        expect(src).toContain(
+            '{ manifest: { slug: "contacts", dependencies: [] }, seed: contactsSeed },'
+        )
     })
 })

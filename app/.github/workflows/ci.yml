@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  # @tinycld/drive owns the comment_mentions migration that the core
+  # notify hook + TS store reference. Without drive linked, the schema
+  # regen below produces a pbSchema.ts missing comment_mentions and
+  # the typecheck fails on core's own store registration.
+  DRIVE_REPO: tinycld/drive
+  DRIVE_REF: main
+
+jobs:
+  checks:
+    name: Lint, Typecheck & Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      # Workspace layout: the app shell and feature members are siblings under
+      # a shared workspace root. Check the shell out at <root>/tinycld and drive
+      # at <root>/drive, write a workspace-root package.json, then a single root
+      # `npm install` links all members (replaces the old packages:link step).
+      - uses: actions/checkout@v5
+        with:
+          path: tinycld
+      - uses: actions/checkout@v5
+        with:
+          repository: ${{ env.DRIVE_REPO }}
+          ref: ${{ env.DRIVE_REF }}
+          path: drive
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: tinycld/.node-version
+          cache: npm
+          cache-dependency-path: tinycld/package-lock.json
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: tinycld/server/go.mod
+          cache-dependency-path: tinycld/server/go.sum
+      - name: Write workspace root manifest
+        run: |
+          cat > package.json <<'JSON'
+          {
+            "name": "tinycld-workspace",
+            "version": "0.0.0",
+            "private": true,
+            "workspaces": ["tinycld", "tinycld/packages/@tinycld/core", "drive"]
+          }
+          JSON
+          echo 'legacy-peer-deps=true' > .npmrc
+      - name: Install workspace
+        run: npm install
+      - name: Generate PB schema types
+        working-directory: tinycld
+        run: |
+          cd server && go build -o tinycld .
+          ./tinycld --dev serve &
+          sleep 3
+          kill %1 2>/dev/null || true
+      - name: Lint + typecheck
+        working-directory: tinycld
+        run: npm run checks
+      - name: Unit tests
+        working-directory: tinycld
+        run: npm run test:unit

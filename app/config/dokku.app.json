@@ -1,0 +1,18 @@
+{
+    "formation": {
+        "web": {
+            "port": 7090
+        }
+    },
+    "cron": [
+        {
+            "command": "/app/bin/prune-releases.sh",
+            "schedule": "0 3 * * *"
+        }
+    ],
+    "scripts": {
+        "dokku": {
+            "postdeploy": "/app/config/sentry-deploy.sh"
+        }
+    }
+}

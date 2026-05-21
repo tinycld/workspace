@@ -2,14 +2,23 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { getPackages } from '../../tinycld.packages'
 import { manifestToConfigPkg } from './describe-packages'
+import { type BuildPkg, runPackageBuilds } from './gen-build'
 import { buildConfigSource, buildSeedsSource, type ConfigPkg } from './gen-config'
 import { buildHelpSource, type HelpGroupInput, parseFrontmatter } from './gen-help'
 import { emitPublicRoutes, emitRoutes } from './gen-routes'
-import { buildUniwindSources, type UniwindSource } from './gen-uniwind'
-import { type BuildPkg, runPackageBuilds } from './gen-build'
 import { buildGoWork, buildPackageExtensionsGo, replaceSymlink, type ServerPkg } from './gen-server'
+import { buildUniwindSources, type UniwindSource } from './gen-uniwind'
 import { loadManifest, type PackageManifest } from './load-manifest'
-import { APP_DIR, GENERATED_DIR, ROUTES_BASE, SERVER_DIR, MIGRATIONS_DIR, HOOKS_DIR, WS_ROOT, memberDir } from './paths'
+import {
+    APP_DIR,
+    GENERATED_DIR,
+    HOOKS_DIR,
+    MIGRATIONS_DIR,
+    memberDir,
+    ROUTES_BASE,
+    SERVER_DIR,
+    WS_ROOT,
+} from './paths'
 
 // Resolve a package.json exports subpath to a directory relative to packageDir.
 // e.g. exports['./screens/*'] === './tinycld/contacts/screens/*.tsx'
@@ -32,12 +41,174 @@ function cleanDir(dir: string) {
     fs.mkdirSync(dir, { recursive: true })
 }
 
+type Feature = { name: string; dir: string; manifest: PackageManifest }
+
+// --- 3. routes: re-export each package's screens into app/a/[orgSlug]/<slug> -
+// Do NOT cleanDir(ROUTES_BASE) — app-owned files live here (_layout.tsx,
+// index.tsx, settings/**). Clean only each linked package's own slug dir.
+// KNOWN TRADEOFF: a package unlinked since the last run leaves an orphan
+// ROUTES_BASE/<old-slug>/ dir behind (the old full-wipe removed those). Fine
+// while the linked set is stable; revisit (e.g. a generated-slugs manifest)
+// if packages get unlinked frequently.
+function emitFeatureRoutes(features: Feature[]) {
+    fs.mkdirSync(ROUTES_BASE, { recursive: true })
+    const appAppDir = path.join(APP_DIR, 'app')
+    for (const f of features) {
+        if (f.manifest.routes?.directory) emitOrgRoutes(f)
+        if (f.manifest.publicRoutes?.directory) emitFeaturePublicRoutes(f, appAppDir)
+    }
+}
+
+function emitOrgRoutes(f: Feature) {
+    const slug = f.manifest.slug
+    // Guard: slug must be a plain segment (no traversal) so the rmSync below
+    // can't escape ROUTES_BASE. Slugs come from trusted manifests, but this
+    // matches cleanDir's defensive posture for a destructive op.
+    if (slug.includes('/') || slug.includes('..') || path.isAbsolute(slug)) {
+        throw new Error(`[generate] invalid package slug '${slug}' — refusing to clean`)
+    }
+    const slugDir = path.join(ROUTES_BASE, slug)
+    if (fs.existsSync(slugDir)) fs.rmSync(slugDir, { recursive: true, force: true })
+    const routesDir = resolveExportDir(f.dir, f.manifest.routes!.directory)
+    if (!routesDir) {
+        console.warn(
+            `[generate] ${f.name}: no exports entry for './${f.manifest.routes!.directory}/*' — routes skipped`
+        )
+        return
+    }
+    emitRoutes({
+        packageName: f.name,
+        slug,
+        packageDir: f.dir,
+        routesDir,
+        importSubpath: f.manifest.routes!.directory,
+        routesBase: ROUTES_BASE,
+    })
+}
+
+function emitFeaturePublicRoutes(f: Feature, appAppDir: string) {
+    const pubDir = resolveExportDir(f.dir, f.manifest.publicRoutes!.directory)
+    if (!pubDir) {
+        console.warn(
+            `[generate] ${f.name}: no exports entry for './${f.manifest.publicRoutes!.directory}/*' — public routes skipped`
+        )
+        return
+    }
+    emitPublicRoutes({
+        packageName: f.name,
+        packageDir: f.dir,
+        routesDir: pubDir,
+        importSubpath: f.manifest.publicRoutes!.directory,
+        appDir: appAppDir,
+    })
+}
+
+// --- 4. package-help.ts (core + features) ------------------------------
+function emitHelp(features: Feature[]) {
+    const coreHelpDir = path.join(memberDir('@tinycld/core'), 'help')
+    const helpSources: Feature[] = [
+        // core help (core has a help/ dir but no manifest; include explicitly)
+        ...(fs.existsSync(coreHelpDir)
+            ? [
+                  {
+                      name: '@tinycld/core',
+                      dir: memberDir('@tinycld/core'),
+                      manifest: { help: { directory: 'help' }, slug: 'core' } as PackageManifest,
+                  },
+              ]
+            : []),
+        ...features,
+    ]
+    const helpGroups: HelpGroupInput[] = []
+    for (const src of helpSources) {
+        const group = readHelpGroup(src)
+        if (group) helpGroups.push(group)
+    }
+    fs.writeFileSync(path.join(GENERATED_DIR, 'package-help.ts'), buildHelpSource(helpGroups))
+}
+
+function readHelpGroup(src: Feature): HelpGroupInput | null {
+    if (!src.manifest.help?.directory) return null
+    const helpDir = path.join(src.dir, src.manifest.help.directory)
+    if (!fs.existsSync(helpDir)) return null
+    const topics = fs
+        .readdirSync(helpDir)
+        .filter(f => f.endsWith('.md'))
+        .map(file => ({
+            topicId: file.replace(/\.md$/, ''),
+            frontmatter: parseFrontmatter(fs.readFileSync(path.join(helpDir, file), 'utf8')),
+        }))
+    if (topics.length === 0) return null
+    return { packageName: src.name, pkgSlug: src.manifest.slug, topics }
+}
+
+// --- 6. server: migration + hook symlinks ------------------------------
+function symlinkServerArtifacts(features: Feature[]) {
+    fs.mkdirSync(SERVER_DIR, { recursive: true })
+    cleanDir(MIGRATIONS_DIR)
+    cleanDir(HOOKS_DIR)
+    // core migrations first (core has no manifest; include explicitly)
+    linkDirContents(
+        path.join(memberDir('@tinycld/core'), 'server', 'pb_migrations'),
+        MIGRATIONS_DIR
+    )
+    for (const f of features) {
+        if (f.manifest.migrations?.directory) {
+            linkDirContents(path.join(f.dir, f.manifest.migrations.directory), MIGRATIONS_DIR)
+        }
+        if (f.manifest.hooks?.directory) {
+            linkDirContents(path.join(f.dir, f.manifest.hooks.directory), HOOKS_DIR)
+        }
+    }
+}
+
+// Symlink every regular file in `srcDir` into `destDir` (no-op if srcDir absent).
+function linkDirContents(srcDir: string, destDir: string) {
+    if (!fs.existsSync(srcDir)) return
+    for (const file of fs.readdirSync(srcDir)) {
+        const srcPath = path.join(srcDir, file)
+        if (!fs.statSync(srcPath).isFile()) continue
+        replaceSymlink(srcPath, path.join(destDir, file))
+    }
+}
+
+// --- 7. server: Go wiring (package_extensions.go + go.work) ------------
+function emitGoWiring(features: Feature[]) {
+    const serverPkgs: ServerPkg[] = features.filter(hasServerPackage).map(f => ({
+        slug: f.manifest.slug,
+        module: f.manifest.server!.module!,
+        serverRelPath: path.relative(SERVER_DIR, path.join(f.dir, f.manifest.server!.package!)),
+    }))
+    fs.writeFileSync(
+        path.join(SERVER_DIR, 'package_extensions.go'),
+        buildPackageExtensionsGo(serverPkgs)
+    )
+    const coreServerRel = path.relative(SERVER_DIR, path.join(memberDir('@tinycld/core'), 'server'))
+    const goWork = path.join(SERVER_DIR, 'go.work')
+    if (serverPkgs.length > 0) {
+        fs.writeFileSync(goWork, buildGoWork(coreServerRel, serverPkgs))
+    } else if (fs.existsSync(goWork)) {
+        fs.unlinkSync(goWork)
+    }
+}
+
+function hasServerPackage(f: Feature): boolean {
+    if (!f.manifest.server?.package) return false
+    if (!fs.existsSync(path.join(f.dir, f.manifest.server.package))) return false
+    if (!f.manifest.server.module) {
+        console.warn(
+            `[generate] ${f.manifest.slug}: server.package declared but server.module is missing — Go wiring skipped`
+        )
+        return false
+    }
+    return true
+}
+
 async function main() {
-    const packageNames = getPackages() // ['@tinycld/core', '@tinycld/contacts', ...]
-    const featureNames = packageNames.filter(n => n !== '@tinycld/core')
+    const featureNames = getPackages().filter(n => n !== '@tinycld/core')
 
     // Load each FEATURE manifest (core has none).
-    const features = await Promise.all(
+    const features: Feature[] = await Promise.all(
         featureNames.map(async name => {
             const dir = memberDir(name)
             const manifest = await loadManifest(dir)
@@ -67,91 +238,8 @@ async function main() {
         "// Auto-generated — re-export of app's tinycld.config.ts\nexport * from '../../tinycld.config'\n"
     )
 
-    // --- 3. routes ----------------------------------------------------------
-    // Do NOT cleanDir(ROUTES_BASE) — app-owned files live here (_layout.tsx,
-    // index.tsx, settings/**). Clean only each linked package's own slug dir.
-    // KNOWN TRADEOFF: a package unlinked since the last run leaves an orphan
-    // ROUTES_BASE/<old-slug>/ dir behind (the old full-wipe removed those). Fine
-    // while the linked set is stable; revisit (e.g. a generated-slugs manifest)
-    // if packages get unlinked frequently.
-    fs.mkdirSync(ROUTES_BASE, { recursive: true })
-    const appAppDir = path.join(APP_DIR, 'app')
-    for (const f of features) {
-        if (f.manifest.routes?.directory) {
-            const slug = f.manifest.slug
-            // Guard: slug must be a plain segment (no traversal) so the rmSync
-            // below can't escape ROUTES_BASE. Slugs come from trusted manifests,
-            // but this matches cleanDir's defensive posture for a destructive op.
-            if (slug.includes('/') || slug.includes('..') || path.isAbsolute(slug)) {
-                throw new Error(`[generate] invalid package slug '${slug}' — refusing to clean`)
-            }
-            const slugDir = path.join(ROUTES_BASE, slug)
-            if (fs.existsSync(slugDir)) fs.rmSync(slugDir, { recursive: true, force: true })
-            const routesDir = resolveExportDir(f.dir, f.manifest.routes.directory)
-            if (routesDir) {
-                emitRoutes({
-                    packageName: f.name,
-                    slug: f.manifest.slug,
-                    packageDir: f.dir,
-                    routesDir,
-                    importSubpath: f.manifest.routes.directory,
-                    routesBase: ROUTES_BASE,
-                })
-            } else {
-                console.warn(
-                    `[generate] ${f.name}: no exports entry for './${f.manifest.routes.directory}/*' — routes skipped`
-                )
-            }
-        }
-        if (f.manifest.publicRoutes?.directory) {
-            const pubDir = resolveExportDir(f.dir, f.manifest.publicRoutes.directory)
-            if (pubDir) {
-                emitPublicRoutes({
-                    packageName: f.name,
-                    packageDir: f.dir,
-                    routesDir: pubDir,
-                    importSubpath: f.manifest.publicRoutes.directory,
-                    appDir: appAppDir,
-                })
-            } else {
-                console.warn(
-                    `[generate] ${f.name}: no exports entry for './${f.manifest.publicRoutes.directory}/*' — public routes skipped`
-                )
-            }
-        }
-    }
-
-    // --- 4. package-help.ts (core + features) ------------------------------
-    const helpGroups: HelpGroupInput[] = []
-    const helpSources: { name: string; dir: string; manifest: PackageManifest }[] = [
-        // core help (core has a help/ dir but no manifest; include explicitly)
-        ...(fs.existsSync(path.join(memberDir('@tinycld/core'), 'help'))
-            ? [
-                  {
-                      name: '@tinycld/core',
-                      dir: memberDir('@tinycld/core'),
-                      manifest: { help: { directory: 'help' }, slug: 'core' } as PackageManifest,
-                  },
-              ]
-            : []),
-        ...features,
-    ]
-    for (const src of helpSources) {
-        if (!src.manifest.help?.directory) continue
-        const helpDir = path.join(src.dir, src.manifest.help.directory)
-        if (!fs.existsSync(helpDir)) continue
-        const topics = fs
-            .readdirSync(helpDir)
-            .filter(f => f.endsWith('.md'))
-            .map(file => ({
-                topicId: file.replace(/\.md$/, ''),
-                frontmatter: parseFrontmatter(fs.readFileSync(path.join(helpDir, file), 'utf8')),
-            }))
-        if (topics.length > 0) {
-            helpGroups.push({ packageName: src.name, pkgSlug: src.manifest.slug, topics })
-        }
-    }
-    fs.writeFileSync(path.join(GENERATED_DIR, 'package-help.ts'), buildHelpSource(helpGroups))
+    emitFeatureRoutes(features)
+    emitHelp(features)
 
     // --- 5. uniwind-sources.css (core + features, real paths) --------------
     const uniwindSources: UniwindSource[] = [
@@ -163,74 +251,8 @@ async function main() {
         buildUniwindSources(uniwindSources)
     )
 
-    // --- 6. server: migration + hook symlinks ------------------------------
-    fs.mkdirSync(SERVER_DIR, { recursive: true })
-    cleanDir(MIGRATIONS_DIR)
-    cleanDir(HOOKS_DIR)
-    // core migrations first (core has no manifest; include explicitly)
-    const coreMig = path.join(memberDir('@tinycld/core'), 'server', 'pb_migrations')
-    if (fs.existsSync(coreMig)) {
-        for (const file of fs.readdirSync(coreMig)) {
-            const srcPath = path.join(coreMig, file)
-            if (!fs.statSync(srcPath).isFile()) continue
-            replaceSymlink(srcPath, path.join(MIGRATIONS_DIR, file))
-        }
-    }
-    for (const f of features) {
-        if (f.manifest.migrations?.directory) {
-            const dir = path.join(f.dir, f.manifest.migrations.directory)
-            if (fs.existsSync(dir)) {
-                for (const file of fs.readdirSync(dir)) {
-                    const srcPath = path.join(dir, file)
-                    if (!fs.statSync(srcPath).isFile()) continue
-                    replaceSymlink(srcPath, path.join(MIGRATIONS_DIR, file))
-                }
-            }
-        }
-        if (f.manifest.hooks?.directory) {
-            const dir = path.join(f.dir, f.manifest.hooks.directory)
-            if (fs.existsSync(dir)) {
-                for (const file of fs.readdirSync(dir)) {
-                    const srcPath = path.join(dir, file)
-                    if (!fs.statSync(srcPath).isFile()) continue
-                    replaceSymlink(srcPath, path.join(HOOKS_DIR, file))
-                }
-            }
-        }
-    }
-
-    // --- 7. server: Go wiring (package_extensions.go + go.work) ------------
-    const serverPkgs: ServerPkg[] = features
-        .filter(f => {
-            if (!f.manifest.server?.package) return false
-            if (!fs.existsSync(path.join(f.dir, f.manifest.server.package))) return false
-            if (!f.manifest.server.module) {
-                console.warn(
-                    `[generate] ${f.manifest.slug}: server.package declared but server.module is missing — Go wiring skipped`
-                )
-                return false
-            }
-            return true
-        })
-        .map(f => ({
-            slug: f.manifest.slug,
-            module: f.manifest.server!.module,
-            serverRelPath: path.relative(
-                SERVER_DIR,
-                path.join(f.dir, f.manifest.server!.package)
-            ),
-        }))
-    fs.writeFileSync(
-        path.join(SERVER_DIR, 'package_extensions.go'),
-        buildPackageExtensionsGo(serverPkgs)
-    )
-    const coreServerRel = path.relative(SERVER_DIR, path.join(memberDir('@tinycld/core'), 'server'))
-    if (serverPkgs.length > 0) {
-        fs.writeFileSync(path.join(SERVER_DIR, 'go.work'), buildGoWork(coreServerRel, serverPkgs))
-    } else {
-        const gw = path.join(SERVER_DIR, 'go.work')
-        if (fs.existsSync(gw)) fs.unlinkSync(gw)
-    }
+    symlinkServerArtifacts(features)
+    emitGoWiring(features)
 
     console.log(`Generated config for ${features.length} feature package(s).`)
 }
