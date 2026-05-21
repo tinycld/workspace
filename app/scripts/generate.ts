@@ -233,9 +233,17 @@ async function main() {
 
     // --- 2. @tinycld/app-generated/tinycld-config re-export shim ------------
     // core imports `@tinycld/app-generated/tinycld-config`; the app supplies it.
+    // Use NAMED re-exports, not `export *`: tinycld.config.ts transitively
+    // imports each package's collections/provider, which import
+    // @tinycld/core/lib/pocketbase, which eagerly calls
+    // buildPackageStores(tinycldConfig) at module-eval — a cycle. Under vitest's
+    // ESM transform a wildcard re-export leaves `tinycldConfig` undefined while
+    // the cycle resolves ("entries is not iterable"); a named re-export creates
+    // a proper live binding that settles once the source finishes. (Metro
+    // tolerates either, but the test loader does not.)
     fs.writeFileSync(
         path.join(GENERATED_DIR, 'tinycld-config.ts'),
-        "// Auto-generated — re-export of app's tinycld.config.ts\nexport * from '../../tinycld.config'\n"
+        "// Auto-generated — re-export of app's tinycld.config.ts\nexport { tinycldConfig } from '../../tinycld.config'\nexport type { MergedPackageSchema } from '../../tinycld.config'\n"
     )
 
     emitFeatureRoutes(features)

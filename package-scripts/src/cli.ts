@@ -31,8 +31,8 @@ function commandsFor(verb: Verb, pkg: CurrentPackage, appDir: string): Command[]
     }
 }
 
-// Build the "all" target list for a verb: features (+ app shell for non-e2e).
-// Read the workspace member dirs directly to avoid importing app code.
+// Build the "all" target list for a verb: features (+ app shell and core for
+// non-e2e). Read the workspace member dirs directly to avoid importing app code.
 function allTargets(workspaceRoot: string, appDir: string, verb: Verb): CurrentPackage[] {
     const targets: CurrentPackage[] = []
     for (const entry of fs.readdirSync(workspaceRoot)) {
@@ -49,6 +49,9 @@ function allTargets(workspaceRoot: string, appDir: string, verb: Verb): CurrentP
         if (hasManifest && pj.name) targets.push({ dir, name: pj.name, kind: 'feature' })
         else if (dir === appDir && pj.name === 'app' && verb !== 'test:e2e')
             targets.push({ dir, name: 'app', kind: 'app' })
+        // core: shared lib, no manifest, no e2e — but typecheck/test/check it.
+        else if (pj.name === '@tinycld/core' && verb !== 'test:e2e')
+            targets.push({ dir, name: '@tinycld/core', kind: 'core' })
     }
     // Skip targets that have nothing to run for the verb.
     return targets.filter(t => {
