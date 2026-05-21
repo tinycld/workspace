@@ -20,6 +20,32 @@ export default defineConfig({
                 find: /^@tinycld\/app-generated\/(.+)$/,
                 replacement: path.join(APP_DIR, 'lib', 'generated', '$1'),
             },
+            // react-native's entry uses Flow syntax (`import typeof`) and CJS
+            // internals that Vite/Rollup cannot parse. Redirect to a CJS stub
+            // that exposes the minimal surface unit tests touch transitively.
+            {
+                find: /^react-native$/,
+                replacement: path.join(APP_DIR, 'tests', 'react-native-stub.cjs'),
+            },
+            // @react-native-async-storage/async-storage requires the RN native
+            // bridge; redirect to an in-memory stub so unit tests run without it.
+            {
+                find: /^@react-native-async-storage\/async-storage$/,
+                replacement: path.join(APP_DIR, 'tests', 'async-storage-stub.cjs'),
+            },
+            // @sentry/react-native transitively requires react-native/Libraries/Promise
+            // via CJS require (bypasses Vite aliases). Stub out the whole package.
+            {
+                find: /^@sentry\/react-native$/,
+                replacement: path.join(APP_DIR, 'tests', 'sentry-stub.cjs'),
+            },
+            // expo-router's CJS entry follows source maps to src/exports.ts which
+            // contains JSX that Vite's node environment cannot parse. Use a minimal
+            // stub that exposes the API surface used by package unit tests.
+            {
+                find: /^expo-router$/,
+                replacement: path.join(APP_DIR, 'tests', 'expo-router-stub.ts'),
+            },
             // ~/* — package source. Resolved relative to the package's own dir
             // at invocation time via the test root, so we map it dynamically below.
         ],
@@ -30,5 +56,6 @@ export default defineConfig({
         // The app shell has no tests/ of its own yet; self-mode `npm test`
         // (tinycld-pkg test from app/) must not fail on an empty match.
         passWithNoTests: true,
+        setupFiles: [path.join(APP_DIR, 'tests', 'unit-setup.ts')],
     },
 })
