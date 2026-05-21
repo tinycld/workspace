@@ -1,4 +1,0 @@
-# Compiled Go binaries from cmd/* programs (gen-templates etc).
-# Generators write their artifacts into the package tree; the binary itself
-# is throwaway.
-gen-templates

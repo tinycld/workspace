@@ -33,5 +33,14 @@ app/tmp/
 # Spike scratch
 spike2/
 
-# @tinycld/core is its own repo (cloned as a sibling member)
+# Workspace members that are their own git repos (cloned as siblings).
+# The outer ./new repo is just scratch scaffolding (workspace root); each
+# member carries its own history + remote, so don't track their contents here.
 /core/
+/contacts/
+/mail/
+/calendar/
+/drive/
+/calc/
+/text/
+/google-takeout-import/
