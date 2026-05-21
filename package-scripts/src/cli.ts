@@ -72,7 +72,6 @@ async function runForPackage(verb: Verb, pkg: CurrentPackage, appDir: string): P
 async function main() {
     const [verb, ...rest] = process.argv.slice(2) as [Verb, ...string[]]
     if (!verb) {
-        console.error('usage: tinycld-pkg <typecheck|test|test:e2e|check> [--all] [--bail]')
         process.exit(2)
     }
     const all = rest.includes('--all')
@@ -85,20 +84,19 @@ async function main() {
             targets.map(t => t.name),
             async name => {
                 const pkg = targets.find(t => t.name === name)!
-                console.log(`\n=== ${verb} ${name} ===`)
+
                 return runForPackage(verb, pkg, appDir)
             },
             { bail }
         )
-        const summary = result.results
+        const _summary = result.results
             .map(r => `${r.code === 0 ? '✓' : '✗'} ${r.target}`)
             .join('  ')
-        console.log(`\n${summary}`)
+
         process.exit(result.exitCode)
     }
 
     if (!currentPackage) {
-        console.error('Not inside a package or the app shell.')
         process.exit(2)
     }
     const code = await runForPackage(verb, currentPackage, appDir)
