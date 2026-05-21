@@ -18,6 +18,7 @@ export interface PackageManifest {
     settings?: { slug: string; component: string; label: string }[]
     seed?: { script: string }
     tests?: { directory: string }
+    build?: { script: string }
     server?: { package: string; module: string }
     help?: { directory: string }
     dependencies?: string[]
