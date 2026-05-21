@@ -6,9 +6,10 @@ import { buildConfigSource, buildSeedsSource, type ConfigPkg } from './gen-confi
 import { buildHelpSource, type HelpGroupInput, parseFrontmatter } from './gen-help'
 import { emitPublicRoutes, emitRoutes } from './gen-routes'
 import { buildUniwindSources, type UniwindSource } from './gen-uniwind'
+import { type BuildPkg, runPackageBuilds } from './gen-build'
 import { buildGoWork, buildPackageExtensionsGo, replaceSymlink, type ServerPkg } from './gen-server'
 import { loadManifest, type PackageManifest } from './load-manifest'
-import { APP_DIR, GENERATED_DIR, ROUTES_BASE, SERVER_DIR, MIGRATIONS_DIR, HOOKS_DIR, memberDir } from './paths'
+import { APP_DIR, GENERATED_DIR, ROUTES_BASE, SERVER_DIR, MIGRATIONS_DIR, HOOKS_DIR, WS_ROOT, memberDir } from './paths'
 
 // Resolve a package.json exports subpath to a directory relative to packageDir.
 // e.g. exports['./screens/*'] === './tinycld/contacts/screens/*.tsx'
@@ -43,6 +44,14 @@ async function main() {
             return { name, dir, manifest }
         })
     )
+
+    // --- 0. package builds (e.g. text's webview-editor → editorHtml.ts) ----
+    // Run any manifest.build scripts first so their outputs exist for the
+    // config emit + the subsequent typecheck/bundle.
+    const builds: BuildPkg[] = features
+        .filter(f => f.manifest.build?.script)
+        .map(f => ({ packageName: f.name, packageDir: f.dir, script: f.manifest.build!.script }))
+    runPackageBuilds(WS_ROOT, builds)
 
     fs.mkdirSync(GENERATED_DIR, { recursive: true })
 
