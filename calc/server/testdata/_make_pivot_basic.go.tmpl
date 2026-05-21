@@ -1,0 +1,42 @@
+// This file is NOT compiled (the .tmpl suffix and leading underscore both
+// keep it out of any go build). It is the source for regenerating
+// testdata/pivot-basic.xlsx. To regenerate the fixture, copy the body
+// into a scratch directory with its own go.mod that depends on
+// excelize/v2 v2.10.1 and `go run` it, then move the produced
+// pivot-basic.xlsx back here.
+package main
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/xuri/excelize/v2"
+)
+
+func main() {
+	f := excelize.NewFile()
+	defer f.Close()
+	_ = f.SetSheetRow("Sheet1", "A1", &[]any{"Region", "Year", "Sales"})
+	_ = f.SetSheetRow("Sheet1", "A2", &[]any{"East", 2024, 10})
+	_ = f.SetSheetRow("Sheet1", "A3", &[]any{"East", 2025, 20})
+	_ = f.SetSheetRow("Sheet1", "A4", &[]any{"West", 2024, 5})
+	_, _ = f.NewSheet("PivotSheet")
+	if err := f.AddPivotTable(&excelize.PivotTableOptions{
+		DataRange:       "Sheet1!A1:C4",
+		PivotTableRange: "PivotSheet!A1:F10",
+		Rows:            []excelize.PivotTableField{{Data: "Region"}},
+		Columns:         []excelize.PivotTableField{{Data: "Year"}},
+		Data: []excelize.PivotTableField{
+			{Data: "Sales", Name: "Sum of Sales", Subtotal: "Sum"},
+		},
+		RowGrandTotals: true,
+		ColGrandTotals: true,
+	}); err != nil {
+		fmt.Println("AddPivotTable:", err)
+		os.Exit(1)
+	}
+	if err := f.SaveAs("testdata/pivot-basic.xlsx"); err != nil {
+		fmt.Println("SaveAs:", err)
+		os.Exit(1)
+	}
+}

@@ -1,0 +1,14 @@
+{
+    "extends": "../app/tsconfig.package-base.json",
+    "compilerOptions": {
+        "baseUrl": ".",
+        "paths": {
+            "~/tinycld/calc/*": ["./tinycld/calc/*"],
+            "@tinycld/core/*": ["../core/*"],
+            "@tinycld/drive/*": ["../drive/tinycld/drive/*"],
+            "@tinycld/app-generated/*": ["../app/lib/generated/*"]
+        }
+    },
+    "include": ["tinycld/**/*.ts", "tinycld/**/*.tsx", "../app/uniwind-types.d.ts"],
+    "exclude": ["node_modules", "server", "pb-migrations", "tests/**/*.spec.ts"]
+}
