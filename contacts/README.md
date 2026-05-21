@@ -2,7 +2,7 @@
 
 Personal address book per user, per org, with a native CardDAV endpoint so any standards-compliant address book client (Apple Contacts, GNOME Contacts / Evolution, DAVx5, Thunderbird) can read and write the same records.
 
-A feature package for the [tinycld](https://tinycld.org/) ecosystem. Lives as a standalone git repo alongside the [`tinycld`](https://tinycld.org/) app shell and other sibling packages (`drive`, `mail`, `calendar`, `calc`, `text`, `google-takeout-import`). The app shell bundles `@tinycld/core` inside it — there is no separate core repo to clone.
+A feature package for the [tinycld](https://tinycld.org/) ecosystem. Lives as a standalone git repo alongside the app shell (`app`), the `@tinycld/core` repo, and other sibling feature packages (`drive`, `mail`, `calendar`, `calc`, `text`, `google-takeout-import`). In this layout `@tinycld/core` is its own standalone repo cloned as a workspace member sibling (not bundled inside the app shell).
 
 ## What it does
 
