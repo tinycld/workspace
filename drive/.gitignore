@@ -1,6 +1,0 @@
-node_modules/
-*.tsbuildinfo
-.DS_Store
-pnpm-lock.yaml
-# Per-developer Claude Code workspace (session worktrees, scratch files).
-.claude/

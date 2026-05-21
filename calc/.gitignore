@@ -1,7 +1,0 @@
-node_modules/
-*.tsbuildinfo
-.DS_Store
-pnpm-lock.yaml
-.claude/
-.worktrees/
-.superpowers/
