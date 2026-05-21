@@ -1,0 +1,124 @@
+{
+    "$schema": "https://biomejs.dev/schemas/2.4.15/schema.json",
+    "vcs": {
+        "enabled": true,
+        "clientKind": "git",
+        "useIgnoreFile": true,
+        "root": "."
+    },
+    "files": {
+        "ignoreUnknown": false,
+        "includes": [
+            "**/*.ts",
+            "**/*.tsx",
+            "**/*.js",
+            "**/*.jsx",
+            "**/*.json",
+            "!server",
+            "!server/**/*",
+            "!**/pb_test_data",
+            "!types",
+            "!lib/generated",
+            "!packages/@tinycld/core/types/pbSchema.ts",
+            "!packages/@tinycld/core/types/pbZodSchema.ts",
+            "!packages/*/server",
+            "!packages/*/server/**/*",
+            "!packages/@*/*/server",
+            "!packages/@*/*/server/**/*",
+            "!packages/*/pb-migrations",
+            "!packages/*/pb-migrations/**/*",
+            "!packages/@*/*/pb-migrations",
+            "!packages/@*/*/pb-migrations/**/*",
+            "!packages/*/node_modules",
+            "!packages/*/node_modules/**/*",
+            "!packages/@*/*/node_modules",
+            "!packages/@*/*/node_modules/**/*",
+            "!node_modules",
+            "!node_modules/**/*",
+            "!app/a/\\[orgSlug\\]/calendar",
+            "!app/a/\\[orgSlug\\]/contacts",
+            "!app/a/\\[orgSlug\\]/drive",
+            "!app/a/\\[orgSlug\\]/mail",
+            "!app/share/\\[token\\].tsx",
+            "!**/routes.d.ts",
+            "!.expo",
+            "!.one",
+            "!.claude",
+            "!ideas"
+        ]
+    },
+    "formatter": {
+        "enabled": true,
+        "indentStyle": "space",
+        "indentWidth": 4,
+        "lineWidth": 100
+    },
+    "linter": {
+        "enabled": true,
+        "rules": {
+            "recommended": true,
+            "style": {
+                "useConst": "error",
+                "useTemplate": "error",
+                "useShorthandFunctionType": "error",
+                "useConsistentArrayType": {
+                    "level": "error",
+                    "options": {
+                        "syntax": "shorthand"
+                    }
+                }
+            },
+            "correctness": {
+                "useExhaustiveDependencies": "warn",
+                "useHookAtTopLevel": "error",
+                "noUnusedVariables": "error"
+            },
+            "suspicious": {
+                "noDebugger": "error",
+                "noConsole": "warn",
+                "noVar": "error",
+                "noExplicitAny": "error"
+            },
+            "complexity": {
+                "noExcessiveCognitiveComplexity": {
+                    "level": "warn",
+                    "options": {
+                        "maxAllowedComplexity": 45
+                    }
+                }
+            }
+        }
+    },
+    "javascript": {
+        "formatter": {
+            "quoteStyle": "single",
+            "quoteProperties": "asNeeded",
+            "trailingCommas": "es5",
+            "semicolons": "asNeeded",
+            "arrowParentheses": "asNeeded"
+        }
+    },
+    "overrides": [
+        {
+            "includes": ["scripts/**/*", "tests/**/*", "**/*.test.ts", "**/*.test.tsx"],
+            "linter": {
+                "rules": {
+                    "suspicious": {
+                        "noConsole": "off"
+                    },
+                    "style": {
+                        "noNonNullAssertion": "off"
+                    }
+                }
+            }
+        }
+    ],
+    "assist": {
+        "enabled": true,
+        "actions": {
+            "source": {
+                "organizeImports": "on"
+            }
+        }
+    }
+}

@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+echo "Generating package wiring..."
+npm run packages:generate
+
+cd server
+
+echo "Building PocketBase..."
+go build -o tinycld .
+echo "Starting PocketBase..."
+exec ./tinycld --dev serve "$@"

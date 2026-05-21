@@ -31,8 +31,18 @@ describe('buildHelpSource', () => {
                 packageName: '@tinycld/mail',
                 pkgSlug: 'mail',
                 topics: [
-                    { topicId: 'b', frontmatter: parseFrontmatter('---\ntitle: B\nsummary: s\norder: 2\n---\nx') },
-                    { topicId: 'a', frontmatter: parseFrontmatter('---\ntitle: A\nsummary: s\norder: 1\n---\nx') },
+                    {
+                        topicId: 'b',
+                        frontmatter: parseFrontmatter(
+                            '---\ntitle: B\nsummary: s\norder: 2\n---\nx'
+                        ),
+                    },
+                    {
+                        topicId: 'a',
+                        frontmatter: parseFrontmatter(
+                            '---\ntitle: A\nsummary: s\norder: 1\n---\nx'
+                        ),
+                    },
                 ],
             },
         ])

@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Runs ios:simulator, waits for logs, captures output, then kills only Expo.
+# Usage: ./bin/debug-ios-boot
+
+set -euo pipefail
+
+LOGFILE="/tmp/debug-ios-boot.log"
+WAIT_SECS="${1:-90}"
+
+echo "Starting ios:simulator, capturing to $LOGFILE (waiting ${WAIT_SECS}s)..."
+> "$LOGFILE"
+
+npm run ios:simulator > "$LOGFILE" 2>&1 &
+EXPO_PID=$!
+echo "Expo PID: $EXPO_PID"
+
+# Wait until "Logs for your project will appear below" shows up, then wait a bit more for errors
+ELAPSED=0
+while [ $ELAPSED -lt "$WAIT_SECS" ]; do
+    if grep -q "Logs for your project will appear below" "$LOGFILE" 2>/dev/null; then
+        echo "Metro ready, waiting 30s for app to boot and log errors..."
+        sleep 30
+        break
+    fi
+    sleep 2
+    ELAPSED=$((ELAPSED + 2))
+done
+
+# Kill only the Expo/Metro process tree
+kill "$EXPO_PID" 2>/dev/null || true
+wait "$EXPO_PID" 2>/dev/null || true
+
+echo ""
+echo "=== Output after 'Logs for your project will appear below' ==="
+sed -n '/Logs for your project will appear below/,$ p' "$LOGFILE" | tail -n +2
+echo ""
+echo "=== Full log at: $LOGFILE ==="

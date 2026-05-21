@@ -43,16 +43,7 @@ export function buildPackageExtensionsGo(pkgs: ServerPkg[]): string {
 
 export function buildGoWork(coreRelPath: string, pkgs: ServerPkg[]): string {
     const uses = pkgs.map(p => `    ${p.serverRelPath}`)
-    return [
-        'go 1.25.0',
-        '',
-        'use (',
-        '    .',
-        `    ${coreRelPath}`,
-        ...uses,
-        ')',
-        '',
-    ].join('\n')
+    return ['go 1.25.0', '', 'use (', '    .', `    ${coreRelPath}`, ...uses, ')', ''].join('\n')
 }
 
 // Replace (or create) a symlink at linkPath → target. Idempotent and safe

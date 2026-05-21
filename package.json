@@ -16,6 +16,6 @@
         "text"
     ],
     "scripts": {
-        "postinstall": "cd app && npm run packages:generate"
+        "postinstall": "cd app && npm run packages:generate && npm run assets:copy-pdfjs"
     }
 }
