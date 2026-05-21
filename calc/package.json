@@ -1,0 +1,40 @@
+{
+    "name": "@tinycld/calc",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "description": "Spreadsheets for your organization",
+    "exports": {
+        "./package.json": "./package.json",
+        "./manifest": "./manifest.ts",
+        "./types": "./tinycld/calc/types.ts",
+        "./collections": "./tinycld/calc/collections.ts",
+        "./screens/*": "./tinycld/calc/screens/*.tsx",
+        "./seed": "./tinycld/calc/seed.ts",
+        "./provider": "./tinycld/calc/provider.tsx",
+        "./hooks/*": "./tinycld/calc/hooks/*.ts",
+        "./components/*": "./tinycld/calc/components/*.tsx"
+    },
+    "scripts": {
+        "typecheck": "tinycld-pkg typecheck",
+        "test": "tinycld-pkg test",
+        "test:e2e": "tinycld-pkg test:e2e",
+        "check": "tinycld-pkg check"
+    },
+    "devDependencies": {
+        "@tinycld/package-scripts": "*"
+    },
+    "peerDependencies": {
+        "react": ">=19",
+        "react-native": ">=0.83",
+        "expo-clipboard": ">=55.0.0",
+        "expo-router": ">=55.0.0",
+        "pbtsdb": ">=0.5",
+        "@tanstack/react-db": ">=0.1",
+        "@tanstack/db": ">=0.6",
+        "hyperformula": ">=3.0.0",
+        "yjs": ">=13.6",
+        "y-protocols": ">=1.0",
+        "numfmt": ">=3.2"
+    }
+}

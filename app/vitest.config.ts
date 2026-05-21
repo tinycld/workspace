@@ -46,6 +46,35 @@ export default defineConfig({
                 find: /^expo-router$/,
                 replacement: path.join(APP_DIR, 'tests', 'expo-router-stub.ts'),
             },
+            // lucide-react-native v1.16+ individual icon .mjs files contain
+            // Flow-style `typeof` syntax that Vite cannot parse. Stub the whole
+            // package so unit tests that transitively import icons don't crash.
+            {
+                find: /^lucide-react-native$/,
+                replacement: path.join(APP_DIR, 'tests', 'lucide-react-native-stub.cjs'),
+            },
+            // uniwind's react-native condition resolves to TypeScript source files
+            // that import react-native internals (Dimensions, Platform, etc.) which
+            // Vite's node environment cannot parse. Stub out the minimal hook surface
+            // used by unit-test import chains (useThemeColor → useCSSVariable).
+            {
+                find: /^uniwind$/,
+                replacement: path.join(APP_DIR, 'tests', 'uniwind-stub.cjs'),
+            },
+            // react-native-reanimated initializes TurboModules at import time which
+            // crashes in a Node test environment. Stub the animation primitives used
+            // by UI components in the import chain (core/ui/modal → Animated).
+            {
+                find: /^react-native-reanimated$/,
+                replacement: path.join(APP_DIR, 'tests', 'react-native-reanimated-stub.cjs'),
+            },
+            // expo-clipboard transitively pulls in expo-modules-core, whose load-time
+            // side effects (global __DEV__, native TurboModules) crash in Node. The
+            // workspace-root stub provides an in-memory implementation for tests.
+            {
+                find: /^expo-clipboard$/,
+                replacement: path.join(APP_DIR, '..', 'tests', 'expo-clipboard-stub.ts'),
+            },
             // ~/* — package source. Resolved relative to the package's own dir
             // at invocation time via the test root, so we map it dynamically below.
         ],

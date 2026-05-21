@@ -1,0 +1,51 @@
+// Pre-generated empty .xlsx file, base64-encoded so it ships as bytes
+// inside the JS bundle and can be turned into a Blob without the
+// client ever authoring xlsx structure. The xlsx the server reads on
+// first open is the same one we upload here.
+//
+// Regenerate by running excelize.NewFile().SaveAs(...) and base64ing
+// the result; today the file holds one empty Sheet1.
+const BLANK_WORKBOOK_BASE64 =
+    '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'
+
+// blankWorkbookBlob returns a fresh Blob carrying the bytes of an empty
+// .xlsx file. Use as the upload body when a user creates a new
+// spreadsheet — passes through useCreateDriveItem unchanged.
+export function blankWorkbookBlob(): Blob {
+    const bytes = decodeBase64ToBytes(BLANK_WORKBOOK_BASE64)
+    // Slice into a fresh ArrayBuffer to keep TS happy under strict
+    // SharedArrayBuffer narrowing — Blob's lib.dom typing rejects
+    // Uint8Array<ArrayBufferLike> directly.
+    const ab = bytes.buffer.slice(
+        bytes.byteOffset,
+        bytes.byteOffset + bytes.byteLength
+    ) as ArrayBuffer
+    return new Blob([ab], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+}
+
+function decodeBase64ToBytes(b64: string): Uint8Array {
+    if (typeof atob === 'function') {
+        const bin = atob(b64)
+        const bytes = new Uint8Array(bin.length)
+        for (let i = 0; i < bin.length; i++) {
+            bytes[i] = bin.charCodeAt(i)
+        }
+        return bytes
+    }
+    // Native fallback (Node-style Buffer is provided in dev builds).
+    type BufferLike = {
+        from: (data: string, enc: string) => { length: number; readUInt8: (i: number) => number }
+    }
+    const g = globalThis as unknown as { Buffer?: BufferLike }
+    if (g.Buffer) {
+        const buf = g.Buffer.from(b64, 'base64')
+        const bytes = new Uint8Array(buf.length)
+        for (let i = 0; i < buf.length; i++) {
+            bytes[i] = buf.readUInt8(i)
+        }
+        return bytes
+    }
+    throw new Error('blankWorkbookBlob: no base64 decoder available')
+}

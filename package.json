@@ -11,7 +11,8 @@
         "google-takeout-import",
         "calendar",
         "mail",
-        "drive"
+        "drive",
+        "calc"
     ],
     "scripts": {
         "postinstall": "cd app && npm run packages:generate"
