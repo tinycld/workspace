@@ -14,14 +14,19 @@ import { runCommand } from './spawn'
 
 type Verb = 'typecheck' | 'test' | 'test:e2e' | 'check'
 
-function commandsFor(verb: Verb, pkg: CurrentPackage, appDir: string): Command[] {
+function commandsFor(
+    verb: Verb,
+    pkg: CurrentPackage,
+    appDir: string,
+    passthrough: string[]
+): Command[] {
     switch (verb) {
         case 'typecheck':
-            return [buildTypecheckCommand(pkg, appDir)]
+            return [buildTypecheckCommand(pkg, appDir, passthrough)]
         case 'test':
-            return [buildTestCommand(pkg, appDir)]
+            return [buildTestCommand(pkg, appDir, passthrough)]
         case 'test:e2e':
-            return [buildE2eCommand(pkg, appDir)]
+            return [buildE2eCommand(pkg, appDir, passthrough)]
         case 'check':
             return buildCheckCommands(pkg, appDir)
         default:
@@ -61,8 +66,13 @@ function allTargets(workspaceRoot: string, appDir: string, verb: Verb): CurrentP
     })
 }
 
-async function runForPackage(verb: Verb, pkg: CurrentPackage, appDir: string): Promise<number> {
-    for (const cmd of commandsFor(verb, pkg, appDir)) {
+async function runForPackage(
+    verb: Verb,
+    pkg: CurrentPackage,
+    appDir: string,
+    passthrough: string[]
+): Promise<number> {
+    for (const cmd of commandsFor(verb, pkg, appDir, passthrough)) {
         const code = await runCommand(cmd)
         if (code !== 0) return code
     }
@@ -70,13 +80,29 @@ async function runForPackage(verb: Verb, pkg: CurrentPackage, appDir: string): P
 }
 
 async function main() {
-    const [verb, ...rest] = process.argv.slice(2) as [Verb, ...string[]]
+    const argv = process.argv.slice(2)
+    const [verb, ...rest] = argv as [Verb, ...string[]]
     if (!verb) {
-        console.error('usage: tinycld-pkg <typecheck|test|test:e2e|check> [--all] [--bail]')
+        console.error(
+            'usage: tinycld-pkg <typecheck|test|test:e2e|check> [--all] [--bail] [-- <runner args>]'
+        )
         process.exit(2)
     }
-    const all = rest.includes('--all')
-    const bail = rest.includes('--bail')
+    // Everything after a `--` separator is forwarded verbatim to the underlying
+    // runner (vitest/playwright/tsc) — e.g. `test:e2e -- -g "name" --workers=1`
+    // to filter to one test. Args before `--` are tinycld-pkg's own flags.
+    const sepIndex = rest.indexOf('--')
+    const ownArgs = sepIndex === -1 ? rest : rest.slice(0, sepIndex)
+    const passthrough = sepIndex === -1 ? [] : rest.slice(sepIndex + 1)
+    const all = ownArgs.includes('--all')
+    const bail = ownArgs.includes('--bail')
+
+    if (all && passthrough.length > 0) {
+        console.error(
+            'Cannot combine --all with `-- <runner args>`: passthrough targets a single package.'
+        )
+        process.exit(2)
+    }
     const { workspaceRoot, appDir, currentPackage } = discover()
 
     if (all) {
@@ -86,7 +112,7 @@ async function main() {
             async name => {
                 const pkg = targets.find(t => t.name === name)!
                 console.log(`\n=== ${verb} ${name} ===`)
-                return runForPackage(verb, pkg, appDir)
+                return runForPackage(verb, pkg, appDir, [])
             },
             { bail }
         )
@@ -101,7 +127,7 @@ async function main() {
         console.error('Not inside a package or the app shell.')
         process.exit(2)
     }
-    const code = await runForPackage(verb, currentPackage, appDir)
+    const code = await runForPackage(verb, currentPackage, appDir, passthrough)
     process.exit(code)
 }
 
