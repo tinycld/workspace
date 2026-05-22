@@ -26,15 +26,19 @@ tinycld/bootstrap   # @tinycld/bootstrap — the CLI: scaffolds packages + assem
 ## How a fresh machine sets up
 
 ```sh
-git clone git@github.com:tinycld/workspace.git ~/code/tinycld
-cd ~/code/tinycld
-# Clone app + core + the package(s) you want to work on (NOT all — a subset is fine):
+mkdir ~/code/tinycld && cd ~/code/tinycld
+# One command assembles a working workspace: the workspace root itself + app +
+# core + the package(s) you name (NOT all — a subset is fine):
 npx @tinycld/bootstrap@latest --tooling --with mail --with contacts
 npm install            # links members + runs the generator (postinstall)
 cd app && npm run dev
 ```
 
-- `bootstrap --tooling` always clones `app` + `core`; `--with <pkg>` adds features.
+- `bootstrap --tooling` self-initializes: when run in a dir that isn't already a
+  workspace root, it clones the `tinycld/workspace` meta-repo first (providing
+  `package-scripts/`, `tinycld.packages.ts`, `tests/`, the root `package.json`),
+  then always clones `app` + `core`; `--with <pkg>` adds features. No manual
+  `git clone tinycld/workspace` is needed.
 - The workspace `package.json` lists every possible member, but npm ignores
   absent dirs — so a partial checkout installs and runs cleanly (the generator
   scans only the members present; app runs as a lean shell with zero features).
@@ -83,20 +87,25 @@ same way regardless of layout and don't gate the cutover:
 
 ## Pending before flip
 
-- **Publish `@tinycld/bootstrap@1.1.0`** to npm (new-layout scaffolding templates
-  + bootstrap-mode workspace linking). It is committed + tagged on `main`; the
-  publish needs an interactive npm OTP (2FA). The currently-published `1.0.1`
-  already provides the `--tooling` assembly that CI/cold-start use, so this is
-  only needed for `npx @tinycld/bootstrap` to scaffold/link with the latest
-  improvements. Run: `cd <bootstrap> && npm publish --otp=<code>`.
+- **Publish the next `@tinycld/bootstrap` minor (1.1.0)** to npm. It now makes
+  `--tooling` self-initialize the workspace (clone the `tinycld/workspace`
+  meta-repo first, so `package-scripts/`, `tinycld.packages.ts`, and `tests/`
+  are provided automatically) plus the new-layout scaffolding templates. The
+  fix is committed on `main`; the publish needs `npm version minor` + push +
+  an interactive npm OTP (2FA): `cd <bootstrap> && npm version minor && git push
+  --follow-tags && npm publish --otp=<code>`. The currently-published `1.0.1`
+  still works for CI/cold-start (those clone the workspace repo explicitly), but
+  the one-command `npx @tinycld/bootstrap --tooling --with <pkg> && npm install`
+  bootstrap (no manual workspace clone) requires this release.
 
 ## Flip steps (human)
 
 1. Announce a freeze on the old `tinycld/tinycld` repo (no new merges).
-2. Publish `@tinycld/bootstrap@1.1.0` (see Pending, above).
-3. Update org docs / READMEs / the website "get started" to point at
-   `tinycld/workspace` + `npx @tinycld/bootstrap --tooling` (replacing the old
-   single-clone + `packages:link` instructions). [website update tracked separately]
+2. Publish the next `@tinycld/bootstrap` minor (see Pending, above).
+3. ✅ DONE — org docs + the website "get started" now point at
+   `npx @tinycld/bootstrap --tooling` (the one-command bootstrap; no manual
+   workspace clone). The old single-clone + `packages:link` instructions are
+   gone from the docs.
 4. Archive the old `tinycld/tinycld` repo (the GitHub repo formerly named
    `tinycld` is already renamed to `tinycld/app`). Keep it archived (not deleted)
    for one release cycle. Confirm no automation still references `tinycld/tinycld`.
