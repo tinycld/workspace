@@ -1,0 +1,57 @@
+# Build context = the assembled workspace root (see app/Dockerfile header).
+# `npm ci` rebuilds node_modules inside the image and the generator produces all
+# generated artifacts, so nothing host-side under here is needed in the context.
+# Everything excluded below is gitignored locally and pure transfer/cache bloat;
+# shipping it forces the daemon to copy ~1.2GB and busts COPY-layer caches on
+# every build (the 64MB host binary + 50MB of local DBs change constantly).
+
+# Dependency trees — ~1.1GB at root alone. `npm ci` recreates the whole
+# workspace link graph from package-lock.json inside the image.
+**/node_modules
+
+# Per-member git repos (each sibling is its own clone). The build never reads
+# git history; drive/.git alone is ~4MB.
+**/.git
+**/.gitignore
+
+# Local PocketBase databases — never wanted in the image. The runtime creates a
+# fresh /app/pb_data (Dockerfile `mkdir`) and operators bind-mount over it.
+**/pb_data
+**/pb_test_data
+
+# Stray host-compiled binary (Mach-O arm64, 64MB) left in the server tree from
+# local `go build`. The go-builder stage produces the real Linux binary; this
+# one is dead weight and would never run in the image anyway.
+app/server/app
+
+# Build/tooling caches and transient outputs (all gitignored, all regenerated).
+**/dist
+**/build
+**/.expo
+**/.vite
+**/.vite-temp
+**/tmp
+**/*.tsbuildinfo
+**/test-results
+**/playwright-report
+**/playwright/.cache
+**/.worktrees
+
+# Editor / OS cruft.
+**/.DS_Store
+**/.idea
+**/.vscode
+**/.claude/settings.local.json
+**/.superpowers
+
+# Local secrets — must never enter the image.
+**/.env
+**/.env.local
+**/.env.*.local
+**/*.pem
+
+# Docs / meta that the build doesn't consume (kept small, but no reason to ship).
+CUTOVER.md
+README.md
+**/CONTRIBUTING.md
+**/LICENSE
