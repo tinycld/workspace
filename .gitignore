@@ -22,3 +22,12 @@ spike2/
 /calc/
 /text/
 /google-takeout-import/
+# bootstrap is its own repo (tinycld/bootstrap), cloned here for local dev.
+/bootstrap/
+
+# Root scaffolding now OWNED by @tinycld/bootstrap (laid down by
+# `bootstrap --tooling` from templates/workspace/). Present on disk for the
+# generator + vitest, but no longer committed here — bootstrap is the source.
+/tinycld.packages.ts
+/vitest.config.ts
+/tests/

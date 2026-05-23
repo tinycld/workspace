@@ -5,8 +5,8 @@
     "type": "module",
     "workspaces": [
         "app",
+        "app/package-scripts",
         "core",
-        "package-scripts",
         "contacts",
         "mail",
         "calendar",
