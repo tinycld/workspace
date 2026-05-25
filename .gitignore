@@ -13,17 +13,6 @@ spike2/
 # The outer ./new repo is just scratch scaffolding (workspace root); each
 # member carries its own history + remote (and its own .gitignore for generated
 # artifacts), so don't track their contents here.
-/app/
-/core/
-/contacts/
-/mail/
-/calendar/
-/drive/
-/calc/
-/text/
-/google-takeout-import/
-# bootstrap is its own repo (tinycld/bootstrap), cloned here for local dev.
-/bootstrap/
 
 # Root scaffolding now OWNED by @tinycld/bootstrap (laid down by
 # `bootstrap --tooling` from templates/workspace/). Present on disk for the
