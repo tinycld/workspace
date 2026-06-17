@@ -1,0 +1,29 @@
+{
+    "name": "@tinycld/workspace",
+    "version": "0.0.1",
+    "private": true,
+    "type": "module",
+    "//workspaces": "pnpm uses pnpm-workspace.yaml for member discovery and IGNORES this array when that file exists. It is kept ONLY as a monorepo-detection hint for external tooling (notably EAS/expo build, whose archiver keys off the npm/yarn `workspaces` field, not pnpm-workspace.yaml). Keep it in sync with pnpm-workspace.yaml's packages list.",
+    "workspaces": [
+        "tinycld",
+        "tinycld/core",
+        "tinycld/package-scripts",
+        "contacts",
+        "mail",
+        "calendar",
+        "drive",
+        "calc",
+        "text",
+        "google-takeout-import"
+    ],
+    "//postinstall": "link-members runs FIRST so the @tinycld/<member> symlinks (notably @tinycld/core) exist before the generator's package-build step (gen-build.ts runPackageBuilds) — text's webview-editor build.ts does a bare `import '@tinycld/core/...'` resolved by package name, which fails on a CLEAN install (fresh container) if the symlink isn't there yet. It then runs again AFTER generate to add the @tinycld/app-generated link (whose target, tinycld/lib/generated, only exists once generate has run); link-members is idempotent and skips app-generated when absent, so the first pass is harmless and the second completes the graph.",
+    "scripts": {
+        "postinstall": "tsx scripts/link-members.ts && cd tinycld && pnpm run packages:generate && cd .. && tsx scripts/link-members.ts && cd tinycld && pnpm run assets:copy-pdfjs",
+        "//docker:ssl": "Terminate TLS on :7443 in front of the tinycld-testing docker container (plain HTTP on :7090) so the iOS/Android simulator can reach it over https. Reuses the mkcert dev certs in tinycld/assets/. Open https://localhost:7443 (or https://<host-ip>:7443 from a device).",
+        "docker:ssl": "local-ssl-proxy --source 7443 --target 7090 --cert tinycld/assets/localhost.pem --key tinycld/assets/localhost-key.pem"
+    },
+    "devDependencies": {
+        "tsx": "^4.21.0"
+    },
+    "packageManager": "pnpm@11.3.0+sha512.2c403d6594527287672b1f7056343a1f7c3634036a67ffabfcc2b3d7595d843768f8787148d1b57cf7956c90606bbd192857c363af19e96d2d0ec9ec5741d215"
+}

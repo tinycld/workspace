@@ -1,0 +1,44 @@
+node_modules/
+*.tsbuildinfo
+.DS_Store
+
+# Playwright
+playwright-report/
+test-results/
+
+# Spike scratch
+spike2/
+
+# Workspace members that are their own git repos (cloned as siblings).
+# The outer ./new repo is just scratch scaffolding (workspace root); each
+# member carries its own history + remote (and its own .gitignore for generated
+# artifacts), so don't track their contents here.
+
+# Root scaffolding now OWNED by @tinycld/bootstrap (laid down by
+# `bootstrap --tooling` from templates/workspace/). Present on disk for the
+# generator + vitest, but no longer committed here — bootstrap is the source.
+/tinycld.packages.ts
+/vitest.config.ts
+/tests/
+# Root biome config — written by the generator (every install) and bootstrap.
+# A minimal `root: true` config that extends tinycld/biome.json so biome is
+# resolvable from inside any member. Not committed; regenerated on install.
+/biome.json
+.claude
+.env*
+.watchman*
+
+# >>> tinycld members (auto-managed by link-members.ts) >>>
+/bootstrap/
+/calc/
+/calendar/
+/contacts/
+/drive/
+/google-takeout-import/
+/mail/
+/org-github/
+/text/
+/tinycld/
+/utils/
+/web/
+# <<< tinycld members <<<

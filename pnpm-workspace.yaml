@@ -1,0 +1,43 @@
+# node-linker=hoisted reproduces npm's flat node_modules: dependencies are
+# hoisted to the workspace-root (and app) node_modules rather than isolated in
+# the .pnpm virtual store with per-package symlinks. This matches what npm did
+# and keeps Metro's resolver — which expects a flat-ish tree and doesn't
+# traverse pnpm's nested .pnpm symlink graph well — working without custom
+# resolver hacks. (pnpm 10+ reads this from pnpm-workspace.yaml, NOT .npmrc.)
+nodeLinker: hoisted
+
+# Link matching workspace members even for plain "*" specs (members declare
+# @tinycld/core and @tinycld/package-scripts as "*", not workspace:*).
+linkWorkspacePackages: true
+
+# Tolerate peer-dependency version drift across the heavy RN/Expo dep graph
+# (pnpm's equivalent of npm's legacy-peer-deps): mismatches warn, not error.
+strictPeerDependencies: false
+
+# Run the workspace-root postinstall (link-members + the generator).
+enablePrePostScripts: true
+
+packages:
+  - tinycld
+  - tinycld/core
+  - tinycld/package-scripts
+  - contacts
+  - mail
+  - calendar
+  - drive
+  - calc
+  - text
+  - google-takeout-import
+
+# Per-package build-script approvals. pnpm blocks dependency install/postinstall
+# scripts by default; these are trusted and needed: esbuild (its native binary,
+# used by the text webview-editor bundler) and @sentry/cli.
+allowBuilds:
+  esbuild: true
+  '@sentry/cli': true
+
+# pnpm 11.3 ships a default minimumReleaseAge supply-chain gate (~24h) that
+# rejects very freshly-published versions. We don't use it — disable it so a
+# same-day publish (e.g. a pbtsdb hotfix we just cut) installs immediately.
+# This file is per-developer local state (not committed to a member repo).
+minimumReleaseAge: 0
