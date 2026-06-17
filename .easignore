@@ -1,0 +1,55 @@
+# EAS archive filter for LOCAL builds run with EAS_NO_VCS=1 + EAS_PROJECT_ROOT
+# pointed at this workspace root (see app/package.json "eas:build:ios:local").
+#
+# Why this file exists: each workspace member (core/, mail/, calc/, …) is its
+# own git repo and is gitignored at this root, and the root itself is not a git
+# repo. EAS's default git-based archiver would therefore capture only the app/
+# repo and miss the rest of the monorepo, so the in-sandbox install can't resolve
+# @tinycld/core et al. Running with EAS_NO_VCS makes EAS copy from the filesystem
+# instead — and when an .easignore is present it is used INSTEAD OF every
+# .gitignore. So this file deliberately KEEPS the member dirs + coordination
+# files (pnpm-workspace.yaml, pnpm-lock.yaml, tinycld.packages.ts, scripts/) that
+# .gitignore would otherwise drop, while still excluding the heavy/transient
+# cruft below. Mirror of .dockerignore (same "assembled workspace minus cruft"
+# goal); keep the two in rough sync.
+
+# Dependency trees — pnpm reinstalls them in the sandbox from the lockfile.
+**/node_modules
+
+# Per-member git repos (each sibling is its own clone). The build never reads
+# git history and EAS_NO_VCS doesn't use git anyway.
+**/.git
+**/.gitignore
+
+# Local PocketBase databases — never wanted in the build.
+**/pb_data
+**/pb_test_data
+
+# Stray host-compiled binary left from local `go build`.
+app/server/app
+
+# Build/tooling caches and transient outputs (all regenerated).
+**/dist
+**/build
+**/.expo
+**/.vite
+**/.vite-temp
+**/tmp
+**/*.tsbuildinfo
+**/test-results
+**/playwright-report
+**/playwright/.cache
+**/.worktrees
+
+# Editor / OS cruft.
+**/.DS_Store
+**/.idea
+**/.vscode
+**/.claude
+**/.superpowers
+
+# Local secrets — must never enter the build archive.
+**/.env
+**/.env.local
+**/.env.*.local
+**/*.pem
