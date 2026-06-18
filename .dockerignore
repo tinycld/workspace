@@ -49,6 +49,7 @@ app/server/app
 **/.env.local
 **/.env.*.local
 **/*.pem
+google-play-service-account.json
 
 # Docs / meta that the build doesn't consume (kept small, but no reason to ship).
 CUTOVER.md

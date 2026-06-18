@@ -53,3 +53,4 @@ app/server/app
 **/.env.local
 **/.env.*.local
 **/*.pem
+google-play-service-account.json
