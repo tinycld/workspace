@@ -27,6 +27,9 @@ spike2/
 .claude
 .env*
 .watchman*
+# Google Play submit credential (service-account JSON) — referenced by
+# tinycld/eas.json submit.production.android.serviceAccountKeyPath. Never commit.
+google-play-service-account.json
 
 # >>> tinycld members (auto-managed by link-members.ts) >>>
 /bootstrap/
