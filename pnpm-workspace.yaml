@@ -41,3 +41,37 @@ allowBuilds:
 # same-day publish (e.g. a pbtsdb hotfix we just cut) installs immediately.
 # This file is per-developer local state (not committed to a member repo).
 minimumReleaseAge: 0
+
+# Framework/native/styling version pins — source of truth is pnpm-overrides.json
+# (and FRAMEWORK_OVERRIDES in @tinycld/bootstrap, which generates both). They keep
+# the in-app OTA rebuild's `pnpm install --no-frozen-lockfile` from drifting these
+# deps off the device's embedded native binary (a native-module mismatch breaks
+# the OTA bundle; a uniwind/tailwindcss bump recompiles classNames differently →
+# app-wide visual drift). Edit pnpm-overrides.json, not this block; re-run
+# bootstrap or pnpm install to regenerate. Bump in lockstep with each EAS build.
+overrides:
+  '@gluestack-ui/utils': 5.0.5-alpha.0
+  '@sentry/react-native': 7.11.0
+  '@shopify/flash-list': 2.0.2
+  '@tanstack/db': 0.6.8
+  '@tanstack/react-query': 5.101.0
+  expo: 55.0.26
+  expo-image: 55.0.11
+  expo-image-picker: 55.0.20
+  expo-router: 55.0.16
+  lucide-react-native: 1.17.0
+  react: 19.2.0
+  react-dom: 19.2.0
+  react-hook-form: 7.77.0
+  react-native: 0.83.6
+  react-native-gesture-handler: 3.0.1
+  react-native-reanimated: 4.2.1
+  react-native-safe-area-context: 5.6.2
+  react-native-screens: 4.23.0
+  react-native-svg: 15.15.3
+  react-native-web: 0.21.2
+  react-native-worklets: 0.7.4
+  tailwind-merge: 3.6.0
+  tailwind-variants: 0.1.20
+  tailwindcss: 4.3.0
+  uniwind: 1.8.0
