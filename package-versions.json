@@ -1,5 +1,5 @@
 {
-    "//": "Source of truth for the pnpm `overrides:` block in pnpm-workspace.yaml. Both generators (this file and the Go writePnpmWorkspaceYAML in the OTA rebuild) read these pins so the dev workspace and the OTA build pin identically. See FRAMEWORK_OVERRIDES in assemble-workspace.ts for why. Bump in lockstep with each native (EAS) build.",
+    "//": "package-versions.json — source of truth for the pnpm `overrides:` block in pnpm-workspace.yaml, and a snapshot of the framework/native version pins at release time (uploaded as a GitHub Release asset by release.ts). Both generators (this file and the Go writePnpmWorkspaceYAML in the OTA rebuild) read these pins so the dev workspace and the OTA build pin identically. See FRAMEWORK_OVERRIDES in assemble-workspace.ts for why. Bump in lockstep with each native (EAS) build.",
     "expo": "55.0.26",
     "react": "19.2.0",
     "react-dom": "19.2.0",
