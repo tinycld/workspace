@@ -1,11 +1,11 @@
 # TinyCld Ecosystem
 
-This directory (`~/code/tinycld/`) **is** the pnpm-workspace root — **not a git repo**. It is assembled per-developer by `@tinycld/bootstrap`, so each root reflects only the members that developer chose, and `pnpm-lock.yaml` is local state. Every member dir is its own independent git repo with its own remote. Third-party packages (e.g. `@acme/custom-pkg`) are first-class — nothing privileges `@tinycld/*`.
+This directory (`~/code/tinycld/`) **is** the pnpm-workspace root. It is assembled per-developer by `@tinycld/bootstrap`, so each root reflects only the members that developer chose, and `pnpm-lock.yaml` is local state. Every member dir is its own independent git repo with its own remote. Third-party packages (e.g. `@acme/custom-pkg`) are first-class — nothing privileges `@tinycld/*`.
 
 ## Layout & the repos you edit
 
 ```
-~/code/tinycld/                  # workspace root (bootstrap-assembled, not a git repo)
+~/code/tinycld/                  # workspace root (bootstrap-assembled)
     package.json                 # member devDeps + coordination scripts; postinstall runs the generator
     pnpm-workspace.yaml          # authoritative member list (packages:)
     tinycld.packages.ts          # getPackages() — enumerates member dirs with a manifest.ts
@@ -64,6 +64,7 @@ Reach for `useState` only for genuinely local, synchronous UI state (a modal tog
 
 - Write unit tests for new features. Mock only via helpers in `tests/unit.helpers.tsx`; never mock our own components or actions.
 - **No e2e workarounds.** No bumped timeouts, no forced-serial runs, no papering over root causes. Fix flakiness at the source — never blindly re-run.
+- **BANNED reasoning when a check or test fails.** Do not ask — or investigate — "is this my fault?", "is it pre-existing?", or "does `main` also fail?". The answer never changes the required action: **diagnose the root cause and fix it at the source.** A red check is never resolved by re-running it, reverting the check, or merging around it. (Whose change caused it is irrelevant — see the global rule: fix errors/warnings regardless of whether your changes caused them.) If a fix is genuinely out of scope, STOP and surface it — do not proceed to green by any other means.
 - **Don't `page.goto()` for in-app navigation.** A `goto` tears down the SPA and cancels in-flight fetches (incl. lazy route chunks) → slow Metro recompile + flaky CI. Use the helpers in `tinycld/tests/e2e/helpers.ts`: `login(page)`, then `navigateToPackage(page, '<slug>')`, then `clickSidebarItem` / sidebar buttons. Reserve `page.goto('/')` for the initial load in `login`. Never assume the post-login redirect lands on a specific package — navigate explicitly.
 
 ### Running quality checks
@@ -90,6 +91,16 @@ pnpm run checks                   # biome lint + app typecheck
 ## Data Queries & Mutations
 
 - **ALWAYS use pbtsdb** for PocketBase data — never use PocketBase directly in components.
+- **Never bypass pbtsdb — these are the patterns that keep slipping through:**
+
+  | ❌ Never | ✅ Instead |
+  |---|---|
+  | `page.request.post('/api/collections/…')` or any raw PB REST call to read/write data | drive the UI (which uses `useMutation`); read-only exception below |
+  | a new API route / Go endpoint to fetch or mutate data | `useLiveQuery`/`useOrgLiveQuery` (read), `useMutation` (write) |
+  | `pb.collection(x).create/update/delete()` in a component, hook, or test | `useMutation` generator from `@tinycld/core/lib/mutations` |
+  | N separate `useLiveQuery` calls merged with JS `Map`s/`.filter()` | one query with `.join()` + `.select()` (see below) |
+
+  **These rules apply to tests too — they are not exempt.** E2E sets up and mutates data by driving the UI (forms → `useMutation`), never by raw PB writes or a helper endpoint. Raw `page.request`/PB REST is allowed **only for read-only assertions** (e.g. `invite-flow.spec.ts` checking a mailbox exists) — never to create or edit data.
 - Import collections with `useStore(...)` from `pbtsdb` (variadic, returns a tuple):
   ```ts
   const [tagsCollection] = useStore('tags')
@@ -102,6 +113,7 @@ pnpm run checks                   # biome lint + app typecheck
   )
   ```
 - Filter with TanStack DB operators (`eq`, `and`, `or`, `gt`, `lt`, …) from `@tanstack/db`. Query syntax follows TanStack DB: `.from()`, `.where()`, `.orderBy()`, `.join()`, `.select()`.
+- **Combine related data in ONE query** with `.join()` + `.select()` — don't run separate `useLiveQuery` calls and stitch them with JS `Map`s. Prefer joining the **local collection** over reading a relation via PocketBase `expand`: a join resolves from the optimistic local store immediately, whereas `expand` waits for a realtime round-trip (so an optimistically-created related record reads as missing until PB redelivers it). A join condition must be a single equality (`eq(a.x, b.y)`); push any non-equality predicate (e.g. `role = 'owner'`) into a subquery and join that. Some existing code (e.g. `useUserOrgs.ts`) predates this and merges in JS — don't copy that; use the joined form for new/changed queries. `OrganizationsTab.tsx` is the reference example.
 - **Prefer inline queries** in the screen component over wrapping in a custom hook — keeps data flow visible. Extract a shared hook only when the same query is needed in 3+ screens.
 - **Mutations:** use `useMutation` from `@tinycld/core/lib/mutations` (not from `@tanstack/react-query` directly). Generator mutation fns auto-await pbtsdb `Transaction`s:
   ```ts
