@@ -45,8 +45,10 @@ google-play-service-account.json
 # >>> tinycld members (auto-managed by link-members.ts) >>>
 /bootstrap/
 /calc/
+/calendar/
 /contacts/
 /drive/
+/google-takeout-import/
 /mail/
 /multi-org/
 /org-github/
