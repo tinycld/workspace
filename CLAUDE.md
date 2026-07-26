@@ -13,7 +13,6 @@ This directory (`~/code/tinycld/`) **is** the pnpm-workspace root. It is assembl
     tests/                       # shared test stubs (e.g. expo-clipboard-stub.ts)
     tinycld/                     # tinycld member — Expo/PocketBase app shell (repo root)
     tinycld/core/                # @tinycld/core — shared TS + Go library (nested, no manifest)
-    tinycld/package-scripts/     # @tinycld/package-scripts — `tinycld-pkg` CLI (nested)
     bootstrap/                   # @tinycld/bootstrap — scaffolder CLI (NOT a workspace member)
     contacts/ mail/ calendar/    # feature packages, each its own repo
     drive/ calc/ text/           #   (depend on @tinycld/core, never on each other)

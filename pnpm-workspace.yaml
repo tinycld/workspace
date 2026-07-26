@@ -23,11 +23,9 @@ packages:
   - tinycld/package-scripts
   - contacts
   - mail
-  - calendar
   - drive
-  - calc
   - text
-  - google-takeout-import
+  - calc
 
 # Per-package build-script approvals. pnpm blocks dependency install/postinstall
 # scripts by default; these are trusted and needed: esbuild (its native binary,

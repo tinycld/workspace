@@ -45,16 +45,20 @@ google-play-service-account.json
 # >>> tinycld members (auto-managed by link-members.ts) >>>
 /bootstrap/
 /calc/
-/calendar/
 /contacts/
 /drive/
-/google-takeout-import/
 /mail/
+/multi-org/
 /org-github/
-/share-stub/
-/shortcut-stub/
+/pocketbase/
 /text/
 /tinycld/
 /utils/
 /web/
 # <<< tinycld members <<<
+
+# Parked members: feature repos temporarily removed from pnpm-workspace.yaml.
+# Each keeps its OWN git repo and remote, so the workspace must never absorb
+# them — move a dir back to the root and re-add it to pnpm-workspace.yaml to
+# bring it back.
+/.parked/
