@@ -26,6 +26,8 @@ packages:
   - drive
   - text
   - calc
+  - calendar
+  - google-takeout-import
 
 # Per-package build-script approvals. pnpm blocks dependency install/postinstall
 # scripts by default; these are trusted and needed: esbuild (its native binary,
