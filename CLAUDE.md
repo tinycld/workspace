@@ -105,14 +105,14 @@ pnpm run checks                   # biome lint + app typecheck
   const [tagsCollection] = useStore('tags')
   const [jobsCollection, addressesCollection] = useStore('jobs', 'addresses')
   ```
-- **Always use `useOrgLiveQuery`** from `@tinycld/core/lib/use-org-live-query` for org-scoped data. It supplies `OrgScope` (`orgId`, `userOrgId`, `orgSlug`), disables until org context loads (prevents cross-org flash), and auto-adds `orgId`/`userOrgId` to deps. Use raw `useLiveQuery` only in the bootstrap hooks `useOrgLiveQuery` itself depends on (`use-org-info`, `use-current-role`, `use-current-user-org`) or for genuinely user-level queries (theme prefs).
+- **Always use `useOrgLiveQuery`** from `@tinycld/core/lib/use-org-live-query` for data queries. **Single-org deployment: the process IS one org** (the multi-org router hosts each org as its own process + DB), so there is no org to scope by — `OrgScope` is `{ userId }`, and it's used to filter "my own rows" (owner/user/author FKs point straight at `users`). The hook disables the query until the user id is known and auto-adds `userId` to deps. Use raw `useLiveQuery` only in low-level hooks `useOrgLiveQuery` itself depends on (e.g. `use-current-role`). A user's role (`owner`/`admin`/`member`/`guest`) lives on `users.role` — read it with `useCurrentRole()`.
   ```ts
-  const { data: items } = useOrgLiveQuery((query, { orgId }) =>
-      query.from({ item: itemsCollection }).where(({ item }) => eq(item.org, orgId))
+  const { data: items } = useOrgLiveQuery((query, { userId }) =>
+      query.from({ item: itemsCollection }).where(({ item }) => eq(item.user, userId))
   )
   ```
 - Filter with TanStack DB operators (`eq`, `and`, `or`, `gt`, `lt`, …) from `@tanstack/db`. Query syntax follows TanStack DB: `.from()`, `.where()`, `.orderBy()`, `.join()`, `.select()`.
-- **Combine related data in ONE query** with `.join()` + `.select()` — don't run separate `useLiveQuery` calls and stitch them with JS `Map`s. Prefer joining the **local collection** over reading a relation via PocketBase `expand`: a join resolves from the optimistic local store immediately, whereas `expand` waits for a realtime round-trip (so an optimistically-created related record reads as missing until PB redelivers it). A join condition must be a single equality (`eq(a.x, b.y)`); push any non-equality predicate (e.g. `role = 'owner'`) into a subquery and join that. Some existing code (e.g. `useUserOrgs.ts`) predates this and merges in JS — don't copy that; use the joined form for new/changed queries. `OrganizationsTab.tsx` is the reference example.
+- **Combine related data in ONE query** with `.join()` + `.select()` — don't run separate `useLiveQuery` calls and stitch them with JS `Map`s. Prefer joining the **local collection** over reading a relation via PocketBase `expand`: a join resolves from the optimistic local store immediately, whereas `expand` waits for a realtime round-trip (so an optimistically-created related record reads as missing until PB redelivers it). A join condition must be a single equality (`eq(a.x, b.y)`); push any non-equality predicate (e.g. `role = 'owner'`) into a subquery and join that. `mail/tinycld/mail/hooks/useMailboxes.ts` is the reference example.
 - **Prefer inline queries** in the screen component over wrapping in a custom hook — keeps data flow visible. Extract a shared hook only when the same query is needed in 3+ screens.
 - **Mutations:** use `useMutation` from `@tinycld/core/lib/mutations` (not from `@tanstack/react-query` directly). Generator mutation fns auto-await pbtsdb `Transaction`s:
   ```ts
@@ -230,13 +230,13 @@ A hard `@tinycld/mail` import makes the dependency load-bearing at compile time 
 2. Declare `help: { directory: 'help' }` in the manifest.
 3. Run `cd ~/code/tinycld/tinycld && pnpm run packages:generate`.
 
-The topic then appears in the help hub (`/a/<org>/help`), the per-package help screen, and via `openHelp('<pkg>:<id>')`. Cross-link inside a body with `[label](help://<pkg>:<other-id>)`; link from UI with `<HelpIcon topic="<pkg>:<id>" />`. Core contributes baseline topics from `tinycld/core/help/` — update those when core behavior changes.
+The topic then appears in the help hub (`/help`), the per-package help screen, and via `openHelp('<pkg>:<id>')`. Cross-link inside a body with `[label](help://<pkg>:<other-id>)`; link from UI with `<HelpIcon topic="<pkg>:<id>" />`. Core contributes baseline topics from `tinycld/core/help/` — update those when core behavior changes.
 
 **Write keyboard shortcuts with Mac glyphs only: `⌘` `⇧` `⌥`.** The renderer substitutes `Ctrl`/`Shift`/`Alt` per-platform — never hand-author "⌘B (Ctrl+B on Windows)". The translation runs on markdown text tokens only, so glyphs inside inline `` `code` `` stay verbatim (use backticks to show the glyph itself rather than a keystroke).
 
 ## Generated output is gitignored — never commit it
 
-The generator (`tinycld/scripts/generate.ts`, run by postinstall and `pnpm run packages:generate`) emits, all gitignored in the `tinycld` repo: `tinycld.config.ts` + `tinycld.seeds.ts`, the `app/a/[orgSlug]/<slug>/**` and `app/<path>` route re-exports, `lib/generated/*` (incl. the `@tinycld/app-generated` `package.json`), and `server/package_extensions.go` / `server/go.work` / `server/pb_*` symlinks. The `node_modules/@tinycld/*` symlinks (from `link-members.ts`) are likewise local-only, and `tinycld/core/types/pbSchema.ts` / `pbZodSchema.ts` are regenerated every install from the on-disk PocketBase migrations (the source of truth) — don't edit any of them. Full inventory: `tinycld/CONTRIBUTING.md` and `tinycld/docs/packages.md`.
+The generator (`tinycld/scripts/generate.ts`, run by postinstall and `pnpm run packages:generate`) emits, all gitignored in the `tinycld` repo: `tinycld.config.ts` + `tinycld.seeds.ts`, the `app/(app)/<slug>/**` and `app/p/<path>` route re-exports, `lib/generated/*` (incl. the `@tinycld/app-generated` `package.json`), and `server/package_extensions.go` / `server/go.work` / `server/pb_*` symlinks. The `node_modules/@tinycld/*` symlinks (from `link-members.ts`) are likewise local-only, and `tinycld/core/types/pbSchema.ts` / `pbZodSchema.ts` are regenerated every install from the on-disk PocketBase migrations (the source of truth) — don't edit any of them. Full inventory: `tinycld/CONTRIBUTING.md` and `tinycld/docs/packages.md`.
 
 ## Further reading
 
