@@ -202,6 +202,8 @@ Add a feature later: `npx @tinycld/bootstrap@latest --assemble-only --with <slug
 
 Optional, all declared in the manifest: `pb-migrations/`, `pb-hooks/`, `server/` (Go, own `go.mod`), `help/`, `tests/`, `playwright.config.ts` (only if the member has e2e specs), `docs/`.
 
+**Migrations may be edited in place.** Deployments are provisioned fresh, so there is no in-place upgrade path from an older schema and no backfill migration is required when a shipped migration's rules or fields change. PocketBase never re-runs an applied migration, so this only works *because* every database starts empty — a rewritten migration would silently never apply to an existing DB, leaving its rules evaluating against the old schema. Do not rely on rewriting history to fix a live database.
+
 The nested `tinycld/<slug>/` layout is required so generated route re-exports can reach source by a stable relative path. **In the `exports` map, always use wildcards — Metro can't resolve literal bracket subpaths.** `"./screens/*": "./tinycld/mail/screens/*.tsx"` matches both `screens/index` and `screens/[id]`; `"./screens/[id]": …` does not. All framework deps go in `peerDependencies`.
 
 ### Manifest
