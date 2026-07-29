@@ -1,5 +1,13 @@
 # Handoff: doctaculous migration (2026-07-11)
 
+> **CLOSED 2026-07-29.** Every phase merged (tinycld #129, drive #40, mail #38,
+> calc #47, text #41) and all five modules are pinned to **doctaculous v0.1.0**.
+> The version blockers this doc tracked — the unpushed `cfRuleElement` fix, the
+> v0.0.4 docx APIs, the local-path `go.work` replace — are all resolved: no
+> `replace` for doctaculous remains in any `go.work`. What is left is the
+> **manual QA** in "Verification still owed" below, which unit tests cannot
+> cover: the Docker image build and the upload/thumbnail/round-trip flows.
+
 Migrating all document rendering/reading/writing onto **doctaculous**
 (`github.com/nathanstitt/doctaculous`, pure Go, local checkout
 `~/code/doctaculous`). Replaces go-fitz/MuPDF + goheif-adjacent CGo baggage,
@@ -18,8 +26,9 @@ CGO_ENABLED=1 remain, but libmupdf-dev is gone).
 |---|---|---|
 | 0 | Go 1.26 toolchain, doctaculous linkage | ✅ done, in PRs |
 | 1 | core thumbnails + textextract, drive/mail callers, Docker/bare-metal | ✅ done, in PRs, all suites green |
-| 2 | calc excelize → pkg/xlsx | ✅ done, **draft** PR (see below) |
-| 3 | text wordZero → pkg/docx | ✅ done on branch `migrate/docx-doctaculous`; awaiting doctaculous v0.0.4 release (see Phase 3 status below) |
+| 2 | calc excelize → pkg/xlsx | ✅ merged (calc #47) |
+| 3 | text wordZero → pkg/docx | ✅ merged (text #41) |
+| — | pin every module to v0.1.0 | ✅ done 2026-07-29 |
 
 ## Open PRs (merge order matters)
 
