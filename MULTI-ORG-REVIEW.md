@@ -113,6 +113,22 @@ install", provider-not-configured copy).
 | DAV DELETE hard-deletes | `webdav.Source.Trash` binds drive_item_state: DELETE stamps `trashed_at` (restorable from the Trash screen), trashed entries vanish from that user's DAV view, per-user semantics preserved. Carried through manifest → controlplane → davconfig wire with round-trip test. tinycld `ce7db91`, drive `dfda510`, multi-org `937775f` |
 | davauth XFF trust | Forwarded headers count only when `Settings().TrustedProxy` names them (PB's own RealIP switch, which the router materializes for tenants), keyed on the proxy-appended rightmost entry — closing both the rotate-to-bypass and spoof-victim-lockout moves. `ratelimit_spoof_test.go`. tinycld `ce7db91` |
 
+### §4.3 remainder + §3 jsvm budget — done 2026-07-30
+
+| Item | Fix |
+|---|---|
+| M4 WriteTimeout truncates SSE | Fronting server drops ReadTimeout/WriteTimeout (they killed every realtime stream and large transfer at 5 min); slow-loris defense stays with ReadHeaderTimeout + IdleTimeout. Config pinned by test. multi-org `88c9f91` |
+| M5 autocert accepts every SNI | `autocertHostPolicy`: apex + one label only; cache anchored under MT_ROOT. |
+| M6 non-atomic publish | `store.Publish` stages into a dot-prefixed temp dir and renames — a failed publish is retryable, a version appears atomically. |
+| M7 manifest eval OOM (partial) | Source (1 MiB) and output (4 MiB) caps; the 5s interrupt already bounded time. **Residual:** a small script can still allocate transiently inside the window — full isolation needs a subprocess with rlimits; publish is superuser-only, so the caps bound the accident. |
+| M8 `/api` DAV prefix | `validateDAVPrefix` refuses mounts under `/api`, `/_`, `/.well-known`. |
+| M10 MX limits | `MaxRecipients` (RFC 5321's 100) + a cap of 8 distinct target orgs per transaction (each new org is a potential 90s cold start; excess answers 452 so legit senders retry). |
+| M11 splice idle | Spliced IMAP/SMTP conns get a 30-min both-directions idle deadline (RFC 3501's autologout minimum) — an abandoned TCP conn no longer pins its org resident via TrackConn. |
+| §3 jsvm execution budget | Fork gains `Config.ExecTimeout` (default 30s when Sandboxed; stock behavior untouched otherwise): interrupts hook/migration load, migration up/down runs, and every pooled handler invocation, with the interrupt cleared so the VM stays usable. `exec_budget_test.go` (4 red-first tests). pocketbase `be93a064`, vendored tinycld `56089b0`. |
+
+The fork branch is no longer single-copy: pushed to
+`github.com:nathanstitt/pocketbase` `feat/multitenant-fork`.
+
 ### Still open
 - **§6: `readonly` server-side enforcement** — the level is now surfaced and
   `none` is gated in the UI, but nothing server-side rejects writes for a
@@ -125,9 +141,10 @@ install", provider-not-configured copy).
 - **Calc parallel flakiness** — ~2 of 87 under `--workers=4`, a *different*
   pair each run, on unmodified code. Not caused by this branch; "different
   victim each run" points at shared state between workers.
-- **The PocketBase fork branch `feat/multitenant-fork` exists only on one
-  developer's disk.** The vendored copy in `tinycld/third_party/pocketbase` is
-  what builds, so nothing is blocked — but that commit is single-copy.
+- ~~**The PocketBase fork branch `feat/multitenant-fork` exists only on one
+  developer's disk.**~~ (**DONE** — pushed to
+  `github.com:nathanstitt/pocketbase`, and the jsvm execution budget landed on
+  it; the vendored copy is synced.)
 
 ---
 
