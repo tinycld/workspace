@@ -64,15 +64,17 @@ mail #42, calendar #29, drive #48, contacts #25) — all checks green.
 | §6 audit_logs guest/member read | `1960000000_audit_logs_admin_only.js`: list/view tightened from non-guest to owner/admin + `disabled != true`, matching the isAdmin-gated screen. Red-first member-denied/admin-allowed tests in `guest_rls_test.go`. tinycld `9cf07cb` |
 | §6 mail shared-mailbox roster RLS | mail `1830000004` ports calendar's `1830000007`: member rows visible to the mailbox's members, delete = self-leave ∨ mailbox owner. New rlstest-driven `member_share_rls_test.go` (runs the shipped migrations). mail `1e59bed` |
 | §6 mail last mailbox-owner | `registerMailboxLastOwnerGuard` rejects demoting/deleting a mailbox's last owner row (the role toggle had no check anywhere); drawer toggle now disables alongside remove. Red-first `mailbox_owner_guard_test.go`. mail `1e59bed` |
+| §6 denied-package bookmark + guest dead end | `PackageAccessDenied` overlays the content area (and hides the sidebar) when the active package resolves to `none` — `usePkgAccess` finally has a caller; `GuestEmptyState` replaces the silent Settings redirect for zero-package guests. `use-pkg-access.test.tsx` covers level resolution. **`readonly` remains advisory** — no server-side write distinction; rules stay the data authorization. tinycld `fa2ec69` |
 
 Verified: `go test ./...` green in core/server, mail, calendar, drive, contacts;
 `tinycld-pkg check` (biome + tsc + vitest) green in all four features; gofmt
 clean (also fixed pre-existing import-order drift in `drive/server/register.go`).
 
 ### Still open
-- **§6 remainder** — `readonly` package access still unenforced dead code;
-  the guest zero-package dead end. (Last-owner guards, mail member RLS, and
-  the audit_logs rule are done — see table above.)
+- **§6: `readonly` server-side enforcement** — the level is now surfaced and
+  `none` is gated in the UI, but nothing server-side rejects writes for a
+  `readonly` grant; it would need a per-package collection map in Go. The
+  denied-bookmark and guest dead-end UX are done (see table above).
 - **§9** — the help topics (calendar CalDAV setup, IMAP username guidance)
   remain unwritten. (§8 is closed: the decision is in `CLAUDE.md` and the
   guard migration now enforces it — see table above.)
