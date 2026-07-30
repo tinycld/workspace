@@ -138,9 +138,18 @@ The fork branch is no longer single-copy: pushed to
   remain unwritten.~~ (**DONE** — see "§9 help drift + §7 correctness" above.
   §8 was already closed: the decision is in `CLAUDE.md` and the guard
   migration enforces it.)
-- **Calc parallel flakiness** — ~2 of 87 under `--workers=4`, a *different*
-  pair each run, on unmodified code. Not caused by this branch; "different
-  victim each run" points at shared state between workers.
+- ~~**Calc parallel flakiness** — ~2 of 87 under `--workers=4`, a *different*
+  pair each run.~~ (**DIAGNOSED & FIXED** — the trace showed the shared
+  `openNewSpreadsheet` helper's create POST answering
+  400 `validation_not_unique`: every worker creates `Untitled.xlsx` in the
+  same root, and drive's server-side dedup was probe-then-insert — two
+  concurrent creates both probe before either inserts, and the loser trips
+  the unique (parent, name) index. A real product bug: two teammates
+  clicking "New sheet" simultaneously hit it too, and the client swallowed
+  the failure (capture-only `onError` + a void'd `mutateAsync`), leaving a
+  silently dead button. Probe+insert now run under a per-parent lock
+  (red-first concurrent-create test), and failures toast. drive `2c2df2e`,
+  calc `df63640`.)
 - ~~**The PocketBase fork branch `feat/multitenant-fork` exists only on one
   developer's disk.**~~ (**DONE** — pushed to
   `github.com:nathanstitt/pocketbase`, and the jsvm execution budget landed on
