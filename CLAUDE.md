@@ -236,6 +236,8 @@ The topic then appears in the help hub (`/help`), the per-package help screen, a
 
 **Write keyboard shortcuts with Mac glyphs only: `⌘` `⇧` `⌥`.** The renderer substitutes `Ctrl`/`Shift`/`Alt` per-platform — never hand-author "⌘B (Ctrl+B on Windows)". The translation runs on markdown text tokens only, so glyphs inside inline `` `code` `` stay verbatim (use backticks to show the glyph itself rather than a keystroke).
 
+**Never hand-author a deployment hostname in a help body** — write `{{server-host}}` and the viewer substitutes the reader's actual hostname (`core/lib/help/tokens.ts`, whole-body replacement, so it works inside code spans and fenced blocks). The motivating case: IMAP/SMTP's server is the org's own web hostname, and an example like `mail.example.com` gets copied verbatim and cannot connect.
+
 ## Generated output is gitignored — never commit it
 
 The generator (`tinycld/scripts/generate.ts`, run by postinstall and `pnpm run packages:generate`) emits, all gitignored in the `tinycld` repo: `tinycld.config.ts` + `tinycld.seeds.ts`, the `app/(app)/<slug>/**` and `app/p/<path>` route re-exports, `lib/generated/*` (incl. the `@tinycld/app-generated` `package.json`), and `server/package_extensions.go` / `server/go.work` / `server/pb_*` symlinks. The `node_modules/@tinycld/*` symlinks (from `link-members.ts`) are likewise local-only, and `tinycld/core/types/pbSchema.ts` / `pbZodSchema.ts` are regenerated every install from the on-disk PocketBase migrations (the source of truth) — don't edit any of them. Full inventory: `tinycld/CONTRIBUTING.md` and `tinycld/docs/packages.md`.
