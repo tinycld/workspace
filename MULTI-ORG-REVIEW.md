@@ -58,6 +58,7 @@ mail #42, calendar #29, drive #48, contacts #25) — all checks green.
 | §2.3 WebDAV parent authz | `resolveParentByPath` now takes the user and requires read on the parent, masking a denial as `ErrNotExist`. `webdav/parent_authz_test.go` |
 | §7 F1 WebDAV temp collision | `persistWrite` renames into a per-upload `os.MkdirTemp` dir instead of the shared process temp dir. Same test file (the concurrent case failed outright before) |
 | §7 F4 DAV challenge throttling | Fixed in `davauth` rather than per-route: a credential-less request is excluded from the limiter entirely, so CalDAV/WebDAV get what carddav's route-level challenge-first ordering already gave it. `davauth/challenge_throttle_test.go` |
+| §8 fresh-provisioning guard | `core/server/pb_migrations/1000000000_refuse_legacy_org_database.js` — sorts before every other migration, throws naming the legacy collection (`user_org`/`orgs`) if one exists. `coreserver/fresh_provision_guard_test.go` (red-first) also pins the sorts-first ordering. tinycld `01384c1` |
 
 Verified: `go test ./...` green in core/server, mail, calendar, drive, contacts;
 `tinycld-pkg check` (biome + tsc + vitest) green in all four features; gofmt
@@ -68,8 +69,9 @@ clean (also fixed pre-existing import-order drift in `drive/server/register.go`)
   wrapper covers ~36 call sites.
 - **§6 last-owner guards, mail member RLS** — both have correct reference
   implementations elsewhere in the codebase to copy.
-- **§8/§9** — the migration decision is now recorded in `CLAUDE.md`; the help
-  topics (calendar CalDAV setup, IMAP username guidance) are not.
+- **§9** — the help topics (calendar CalDAV setup, IMAP username guidance)
+  remain unwritten. (§8 is closed: the decision is in `CLAUDE.md` and the
+  guard migration now enforces it — see table above.)
 - **Calc parallel flakiness** — ~2 of 87 under `--workers=4`, a *different*
   pair each run, on unmodified code. Not caused by this branch; "different
   victim each run" points at shared state between workers.
@@ -542,9 +544,9 @@ covered by a passing test.
 9. ~~§2.3 calendar `@request.body.calendar` pin; WebDAV parent authz~~
 10. ~~F1 WebDAV per-upload temp dir (cross-user content swap); F4 DAV challenge
     throttling~~
-11. §8 record the fresh-provisioning decision — a guard migration is better than
-    a PR comment (still open; `CLAUDE.md` records the decision, no guard
-    migration exists)
+11. ~~§8 record the fresh-provisioning decision — a guard migration is better
+    than a PR comment~~ (**DONE** — `CLAUDE.md` records the decision and
+    `1000000000_refuse_legacy_org_database.js` enforces it, tinycld `01384c1`)
 
 **Tier 4 — before a real production day:** H4 admission control + LRU;
 M2 wrap load errors and log them (the difference between diagnosing a broken
