@@ -83,6 +83,14 @@ confinement suite were verified in a privileged linux container before push).
 | §4.3 M1 accept error kills mail listeners | `acceptLoop` retries transient errors with capped exponential backoff (5ms→1s, reset on success), exits only on shutdown/`net.ErrClosed`, and stays responsive to Shutdown mid-backoff. Two red-first tests in `mailrouter_test.go`. multi-org `3da239d` |
 | §4.3 M9 switcher cookie carries attacker URL | Entries are `{slug, name}` only; slugs validated as single lowercase DNS labels on both parsers; the client derives `https://<slug>.<parent-of-current-hostname>` (`orgUrlForSlug`) — data the cookie cannot influence. Legacy `url` fields parse and are shed. multi-org `1265031` (orgcookie + serve-org + e2e pin), tinycld `56751db` (org-cookie.ts, useUserOrgs) |
 
+### B5/B6/B7 — done 2026-07-29
+
+| Item | Fix |
+|---|---|
+| B7 blank tab + raw plain-text errors | New `multi-org/internal/webpage`: one branded, dark-mode-aware HTML shell for every router-served page. 503 (spawning/crash-backoff), restart, and 502 proxy-failure responses are auto-refreshing interstitials for browser navigations and PocketBase-shaped JSON (`{code,message,data}`) for everything else (fetch/curl/DAV). Browser navigations to a cold org now wait a bounded 3s (`htmlWaitBudget`) before getting the interstitial — the spawn continues off-request and each refresh re-joins it — instead of a blank tab for up to 45s. `instance.go`'s restart/502 paths use the same pages. Red-first tests in `webpage_test.go` + `frontrouter_test.go`. |
+| B6 apex redirect loop + org discovery | The apex serves an **org-finder page** instead of 302-ing to itself: lists the orgs from the `tinycld_orgs` cookie (URLs derived from `location.hostname`, never from the cookie — same invariant as the switcher) plus a go-to-slug form; `www` still 302s to the now-working apex. Client side, the user-menu switcher gains "Open another organization…" linking to the apex (`useApexUrl`/`apexUrlForHost`, null on standalone deployments so the entry hides). |
+| B5 mail hostname docs + UI | Help bodies now support a `{{server-host}}` token substituted with the deployment's real hostname at render time (`core/lib/help/tokens.ts`, whole-body so it works in code blocks). `mail/help/imap.md`/`smtp.md` rewritten around it: the server is the org's own web hostname (SNI demux), with an explicit "not `mail.yourdomain.com`" callout, a BYE-on-wrong-hostname troubleshooting entry, and `-servername` on the openssl probe. Token documented in `CLAUDE.md` + `CONTRIBUTING.md`. |
+
 ### Still open
 - **§6: `readonly` server-side enforcement** — the level is now surfaced and
   `none` is gated in the UI, but nothing server-side rejects writes for a
@@ -576,7 +584,8 @@ it); M3 stop chowning storage per spawn; M1 mail listener backoff; M9 drop
 
 **Fast-follow:** ~~§5 default `onError` in the `useMutation` wrapper~~ (**DONE**,
 tinycld `77f3332`); ~~§6 last-owner guards and mail member RLS~~ (**DONE**,
-tinycld `9cf07cb`, mail `1e59bed`); B5/B6/B7
-interstitials and a mail-hostname UI panel; §9 help topics — especially
+tinycld `9cf07cb`, mail `1e59bed`); ~~B5/B6/B7
+interstitials and a mail-hostname UI panel~~ (**DONE** — see "B5/B6/B7 — done"
+above); §9 help topics — especially
 calendar's missing CalDAV setup topic and the IMAP username guidance, which is
 now actively wrong rather than merely stale.
