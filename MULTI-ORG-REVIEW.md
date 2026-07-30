@@ -42,13 +42,27 @@ Also fixed, found while getting CI green (not in the original review):
 - **E2E gated on URLs rather than rendered screens** — 46 `waitForURL` calls
   reduced to 1. See §11.
 
-### Still open
+### Tier 3 security — done 2026-07-29
 
-- **Tier 3 security** (§2.1, §2.2, §2.3, §6, §7): disabled accounts retaining
-  IMAP/SMTP access is the highest-severity item — the only one not bounded by
-  token expiry. Then guest auto-provisioning, the calendar
-  `@request.body.calendar` pin, WebDAV parent authz, per-upload temp dir, DAV
-  challenge throttling.
+All six items are fixed, each with a test confirmed red against the prior code
+first. Not yet committed or pushed.
+
+| Item | Fix |
+|---|---|
+| §2.1 mail IMAP/SMTP ignore `disabled` | `disabled` check in `imap_session.go` Login + `smtp_session.go` authenticate (both authenticate against the record directly, so PB's auth hooks never ran). `mail/server/disabled_protocol_test.go` |
+| §2.1 drive `/api/drive/search` | `driveshare.IsSuspended` (new, exported so the definition stays single-sourced) called in `searchDriveItems` — covers the HTTP route and the `$drive.search` binding together. `drive/server/search_disabled_test.go` |
+| §2.1 contacts rules | `contacts/pb-migrations/1830000000` adds `@request.auth.disabled != true` to all five rules; new `contacts/server/disabled_rls_test.go` (contacts had no RLS suite at all) |
+| §2.2 guest auto-provisioning | `role == "guest"` early-return in both `handleUserCreated`s; `mailboxes.tsx` picker now excludes guests + disabled. Two `guest_lifecycle_test.go` |
+| §2.3 calendar membership repoint | `calendar/pb-migrations/1830000008` appends the `@request.body.calendar` pin. `member_repoint_rls_test.go` |
+| §2.3 WebDAV parent authz | `resolveParentByPath` now takes the user and requires read on the parent, masking a denial as `ErrNotExist`. `webdav/parent_authz_test.go` |
+| §7 F1 WebDAV temp collision | `persistWrite` renames into a per-upload `os.MkdirTemp` dir instead of the shared process temp dir. Same test file (the concurrent case failed outright before) |
+| §7 F4 DAV challenge throttling | Fixed in `davauth` rather than per-route: a credential-less request is excluded from the limiter entirely, so CalDAV/WebDAV get what carddav's route-level challenge-first ordering already gave it. `davauth/challenge_throttle_test.go` |
+
+Verified: `go test ./...` green in core/server, mail, calendar, drive, contacts;
+`tinycld-pkg check` (biome + tsc + vitest) green in all four features; gofmt
+clean (also fixed pre-existing import-order drift in `drive/server/register.go`).
+
+### Still open
 - **§5 silent mutation failures** — one default `onError` in the `useMutation`
   wrapper covers ~36 call sites.
 - **§6 last-owner guards, mail member RLS** — both have correct reference
@@ -519,15 +533,17 @@ covered by a passing test.
 6. B2 setup operator role; B4 `org_pkg_access` rules migration (B3+B4 together
    are what make share links work end to end)
 
-**Tier 3 — authorization consistency:**
-7. §2.1 disabled checks — **mail IMAP/SMTP first**, it is the only one not
-   bounded by token expiry
-8. §2.2 guest early-returns in mail + calendar user-create hooks
-9. §2.3 calendar `@request.body.calendar` pin; WebDAV parent authz
-10. F1 WebDAV per-upload temp dir (cross-user content swap); F4 DAV challenge
-    throttling
+**Tier 3 — authorization consistency:** items 7–10 below are **DONE** (see
+"Tier 3 security — done" above).
+7. ~~§2.1 disabled checks — **mail IMAP/SMTP first**, it is the only one not
+   bounded by token expiry~~
+8. ~~§2.2 guest early-returns in mail + calendar user-create hooks~~
+9. ~~§2.3 calendar `@request.body.calendar` pin; WebDAV parent authz~~
+10. ~~F1 WebDAV per-upload temp dir (cross-user content swap); F4 DAV challenge
+    throttling~~
 11. §8 record the fresh-provisioning decision — a guard migration is better than
-    a PR comment
+    a PR comment (still open; `CLAUDE.md` records the decision, no guard
+    migration exists)
 
 **Tier 4 — before a real production day:** H4 admission control + LRU;
 M2 wrap load errors and log them (the difference between diagnosing a broken
