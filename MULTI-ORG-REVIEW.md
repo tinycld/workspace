@@ -91,14 +91,37 @@ confinement suite were verified in a privileged linux container before push).
 | B6 apex redirect loop + org discovery | The apex serves an **org-finder page** instead of 302-ing to itself: lists the orgs from the `tinycld_orgs` cookie (URLs derived from `location.hostname`, never from the cookie — same invariant as the switcher) plus a go-to-slug form; `www` still 302s to the now-working apex. Client side, the user-menu switcher gains "Open another organization…" linking to the apex (`useApexUrl`/`apexUrlForHost`, null on standalone deployments so the entry hides). |
 | B5 mail hostname docs + UI | Help bodies now support a `{{server-host}}` token substituted with the deployment's real hostname at render time (`core/lib/help/tokens.ts`, whole-body so it works in code blocks). `mail/help/imap.md`/`smtp.md` rewritten around it: the server is the org's own web hostname (SNI demux), with an explicit "not `mail.yourdomain.com`" callout, a BYE-on-wrong-hostname troubleshooting entry, and `-servername` on the openssl probe. Token documented in `CLAUDE.md` + `CONTRIBUTING.md`. |
 
+### §9 help drift + §7 correctness — done 2026-07-30
+
+§9 (all items): calendar gained a client-facing CalDAV setup topic
+(`calendar/help/caldav.md`, modeled on contacts' carddav.md). The IMAP/DAV
+username inconsistency was fixed at the product level, not just docs: mail's
+IMAP/SMTP now authenticate via the new `davauth.VerifyCredentials` (username
+OR email + dummy-hash timing defense + disabled cutoff — single-sourced with
+DAV), and every help topic + the Recovery-Email hint now says so. text/calc
+help de-orged; contacts/drive help swept to `{{server-host}}`; the
+"Organization" settings page is renamed **Storage** (route, nav, title);
+stale role/provider blurbs corrected (owner blurb, "ask an org owner to
+install", provider-not-configured copy).
+
+§7 leftovers (all four, red-first):
+
+| Item | Fix |
+|---|---|
+| IMAP folder union | `folderToFilter` now pins `thread.mailbox` on every branch — INBOX/status/virtual folders scoped to the selected namespace. `imap_mailbox_scope_test.go`. mail `a9452e1` |
+| If-Match/If-None-Match ignored | New `core/server/davcond` enforces RFC 9110 PUT preconditions; both CalDAV and CardDAV backends consult it (412 + write refused). `precondition_test.go` twins. tinycld `ce7db91` |
+| DAV DELETE hard-deletes | `webdav.Source.Trash` binds drive_item_state: DELETE stamps `trashed_at` (restorable from the Trash screen), trashed entries vanish from that user's DAV view, per-user semantics preserved. Carried through manifest → controlplane → davconfig wire with round-trip test. tinycld `ce7db91`, drive `dfda510`, multi-org `937775f` |
+| davauth XFF trust | Forwarded headers count only when `Settings().TrustedProxy` names them (PB's own RealIP switch, which the router materializes for tenants), keyed on the proxy-appended rightmost entry — closing both the rotate-to-bypass and spoof-victim-lockout moves. `ratelimit_spoof_test.go`. tinycld `ce7db91` |
+
 ### Still open
 - **§6: `readonly` server-side enforcement** — the level is now surfaced and
   `none` is gated in the UI, but nothing server-side rejects writes for a
   `readonly` grant; it would need a per-package collection map in Go. The
   denied-bookmark and guest dead-end UX are done (see table above).
-- **§9** — the help topics (calendar CalDAV setup, IMAP username guidance)
-  remain unwritten. (§8 is closed: the decision is in `CLAUDE.md` and the
-  guard migration now enforces it — see table above.)
+- ~~**§9** — the help topics (calendar CalDAV setup, IMAP username guidance)
+  remain unwritten.~~ (**DONE** — see "§9 help drift + §7 correctness" above.
+  §8 was already closed: the decision is in `CLAUDE.md` and the guard
+  migration enforces it.)
 - **Calc parallel flakiness** — ~2 of 87 under `--workers=4`, a *different*
   pair each run, on unmodified code. Not caused by this branch; "different
   victim each run" points at shared state between workers.
