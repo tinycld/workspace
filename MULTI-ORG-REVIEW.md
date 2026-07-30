@@ -60,14 +60,19 @@ mail #42, calendar #29, drive #48, contacts #25) — all checks green.
 | §7 F4 DAV challenge throttling | Fixed in `davauth` rather than per-route: a credential-less request is excluded from the limiter entirely, so CalDAV/WebDAV get what carddav's route-level challenge-first ordering already gave it. `davauth/challenge_throttle_test.go` |
 | §8 fresh-provisioning guard | `core/server/pb_migrations/1000000000_refuse_legacy_org_database.js` — sorts before every other migration, throws naming the legacy collection (`user_org`/`orgs`) if one exists. `coreserver/fresh_provision_guard_test.go` (red-first) also pins the sorts-first ordering. tinycld `01384c1` |
 | §5 silent mutation failures | Default `onError` in the `useMutation` wrapper (`core/lib/mutations.ts`): failures without an explicit handler now toast (`mutation.error`) + `captureException`; an explicit `onError` replaces the default, so form handlers behave as before. Red-first tests in `mutations.test.tsx`; guidance added to `CONTRIBUTING.md`. tinycld `77f3332` |
+| §6 last org-owner guards | `RegisterLastOwnerGuard` (core) rejects demoting/disabling/deleting the last *enabled* owner (superusers bypass); shared check in `/api/account/{disable,delete}` and `/api/admin/users/offboard`, which save below the request hooks. `MembersDrawer` role picker now disables for the last owner. Red-first `last_owner_guard_test.go`. tinycld `9cf07cb` |
+| §6 audit_logs guest/member read | `1960000000_audit_logs_admin_only.js`: list/view tightened from non-guest to owner/admin + `disabled != true`, matching the isAdmin-gated screen. Red-first member-denied/admin-allowed tests in `guest_rls_test.go`. tinycld `9cf07cb` |
+| §6 mail shared-mailbox roster RLS | mail `1830000004` ports calendar's `1830000007`: member rows visible to the mailbox's members, delete = self-leave ∨ mailbox owner. New rlstest-driven `member_share_rls_test.go` (runs the shipped migrations). mail `1e59bed` |
+| §6 mail last mailbox-owner | `registerMailboxLastOwnerGuard` rejects demoting/deleting a mailbox's last owner row (the role toggle had no check anywhere); drawer toggle now disables alongside remove. Red-first `mailbox_owner_guard_test.go`. mail `1e59bed` |
 
 Verified: `go test ./...` green in core/server, mail, calendar, drive, contacts;
 `tinycld-pkg check` (biome + tsc + vitest) green in all four features; gofmt
 clean (also fixed pre-existing import-order drift in `drive/server/register.go`).
 
 ### Still open
-- **§6 last-owner guards, mail member RLS** — both have correct reference
-  implementations elsewhere in the codebase to copy.
+- **§6 remainder** — `readonly` package access still unenforced dead code;
+  the guest zero-package dead end. (Last-owner guards, mail member RLS, and
+  the audit_logs rule are done — see table above.)
 - **§9** — the help topics (calendar CalDAV setup, IMAP username guidance)
   remain unwritten. (§8 is closed: the decision is in `CLAUDE.md` and the
   guard migration now enforces it — see table above.)
@@ -553,8 +558,8 @@ store in a minute and never diagnosing it); M3 stop chowning storage per spawn;
 M1 mail listener backoff; M9 drop `url` from the switcher cookie.
 
 **Fast-follow:** ~~§5 default `onError` in the `useMutation` wrapper~~ (**DONE**,
-tinycld `77f3332`); §6 last-owner guards and mail member RLS (both have correct
-reference implementations already in the codebase to copy); B5/B6/B7
+tinycld `77f3332`); ~~§6 last-owner guards and mail member RLS~~ (**DONE**,
+tinycld `9cf07cb`, mail `1e59bed`); B5/B6/B7
 interstitials and a mail-hostname UI panel; §9 help topics — especially
 calendar's missing CalDAV setup topic and the IMAP username guidance, which is
 now actively wrong rather than merely stale.
