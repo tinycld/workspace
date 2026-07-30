@@ -129,11 +129,29 @@ install", provider-not-configured copy).
 The fork branch is no longer single-copy: pushed to
 `github.com:nathanstitt/pocketbase` `feat/multitenant-fork`.
 
+### §6 readonly/none server-side enforcement — done 2026-07-30
+
+The per-package collection map turned out to need no wiring at all:
+ownership is resolved by naming convention (a collection belongs to the
+installed pkg_registry package whose slug it carries as name or `slug_*`
+prefix — which every shipped collection already follows), so enforcement
+covers TS-only packages automatically. New `core/server/pkgaccess` mirrors
+the client's exact level resolution (owner/admin full; member full unless
+override; guest none unless granted) and refuses non-full writes at every
+surface that can write:
+
+| Surface | Where |
+|---|---|
+| REST record create/update/delete | request hooks bound in `registerSharedCore` (system writes — inbound mail, seeds, feature Go — carry no request auth and are untouched; reads stay rule-governed) |
+| WebDAV | `requirePkgWrite` in openForWrite / Mkdir / RemoveAll / Rename |
+| CalDAV / CardDAV | Put/Delete object paths (403, read paths untouched) |
+| IMAP | mutating commands (STORE/APPEND/EXPUNGE/COPY/MOVE/folder ops) refuse with a read-only NO; login + FETCH stay available |
+| SMTP submission | refused at AUTH (sending is a write) |
+
+All red-first (`pkg_access_guard_test.go` + per-protocol twins). Naming
+convention documented in `docs/packages.md`. tinycld + mail commits below.
+
 ### Still open
-- **§6: `readonly` server-side enforcement** — the level is now surfaced and
-  `none` is gated in the UI, but nothing server-side rejects writes for a
-  `readonly` grant; it would need a per-package collection map in Go. The
-  denied-bookmark and guest dead-end UX are done (see table above).
 - ~~**§9** — the help topics (calendar CalDAV setup, IMAP username guidance)
   remain unwritten.~~ (**DONE** — see "§9 help drift + §7 correctness" above.
   §8 was already closed: the decision is in `CLAUDE.md` and the guard
