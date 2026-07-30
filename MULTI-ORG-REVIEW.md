@@ -120,7 +120,7 @@ install", provider-not-configured copy).
 | M4 WriteTimeout truncates SSE | Fronting server drops ReadTimeout/WriteTimeout (they killed every realtime stream and large transfer at 5 min); slow-loris defense stays with ReadHeaderTimeout + IdleTimeout. Config pinned by test. multi-org `88c9f91` |
 | M5 autocert accepts every SNI | `autocertHostPolicy`: apex + one label only; cache anchored under MT_ROOT. |
 | M6 non-atomic publish | `store.Publish` stages into a dot-prefixed temp dir and renames — a failed publish is retryable, a version appears atomically. |
-| M7 manifest eval OOM (partial) | Source (1 MiB) and output (4 MiB) caps; the 5s interrupt already bounded time. **Residual:** a small script can still allocate transiently inside the window — full isolation needs a subprocess with rlimits; publish is superuser-only, so the caps bound the accident. |
+| M7 manifest eval OOM | Source (1 MiB) and output (4 MiB) caps + the 5s interrupt, and — closing the residual — the eval now runs in a re-exec'd subprocess (`internal/manifesteval`, serve-multi's hidden `manifest-eval` subcommand) that applies RLIMIT_AS (2 GiB, linux) to itself: an allocation bomb kills the child, never the router. Bomb containment pinned (linux-gated). multi-org `5054077` |
 | M8 `/api` DAV prefix | `validateDAVPrefix` refuses mounts under `/api`, `/_`, `/.well-known`. |
 | M10 MX limits | `MaxRecipients` (RFC 5321's 100) + a cap of 8 distinct target orgs per transaction (each new org is a potential 90s cold start; excess answers 452 so legit senders retry). |
 | M11 splice idle | Spliced IMAP/SMTP conns get a 30-min both-directions idle deadline (RFC 3501's autologout minimum) — an abandoned TCP conn no longer pins its org resident via TrackConn. |
@@ -128,6 +128,15 @@ install", provider-not-configured copy).
 
 The fork branch is no longer single-copy: pushed to
 `github.com:nathanstitt/pocketbase` `feat/multitenant-fork`.
+
+Also closed (2026-07-30, follow-up): **§3's `.pb.ts`-with-`export` bug** — a
+hook file using import/export now fails with an error naming the author's
+file and the fix, both at tenant load (fork `5ad3947c`, vendored tinycld
+`c82acd3`) and at publish (`transpileForStore` applies the same script-mode
+parse check to pb-hooks/pb-migrations paths; manifest.ts keeps its
+`export default`). The shared transpile golden fixture moved to script-mode
+content on both sides in lockstep — it was unknowingly pinning the broken
+case. multi-org `9da3dab`.
 
 ### §6 readonly/none server-side enforcement — done 2026-07-30
 
