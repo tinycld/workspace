@@ -70,6 +70,19 @@ Verified: `go test ./...` green in core/server, mail, calendar, drive, contacts;
 `tinycld-pkg check` (biome + tsc + vitest) green in all four features; gofmt
 clean (also fixed pre-existing import-order drift in `drive/server/register.go`).
 
+### Tier 4 operational hardening — done 2026-07-29
+
+All five items fixed red-first (the linux-gated chownTree test and the root
+confinement suite were verified in a privileged linux container before push).
+
+| Item | Fix |
+|---|---|
+| §4.2 H4 admission control + LRU | `Config.MaxResident` (`MT_MAX_RESIDENT_ORGS`): at capacity the LRU idle instance is evicted to admit a newcomer; refused with 503 when every resident org has tracked connections. `Config.MaxConcurrentSpawns` (`MT_MAX_CONCURRENT_SPAWNS`, default 4) bounds cold-start stampedes, waiters bounded by the spawn timeout. `admission_test.go` (3 red-first tests). multi-org `b62192b` |
+| §4.3 M2 unwrapped load errors → 404, unlogged | `noteLoadFailure` in Get's singleflight path: non-sentinel host failures (pruned package version, full disk, config write) wrap `ErrOrgUnavailable` → 503 + Retry-After, and every load attempt logs exactly once (Error for host problems, Debug for unknown-slug probes). Also surfaces spawn/readiness failures that previously reached no log. multi-org `18f4306` |
+| §4.3 M3 chownTree walks storage per spawn | The walk prunes at entries the tenant uid already owns (only the tenant creates files under its uid); the orgDir root's 0700 gate is still re-enforced every spawn, so pruned subtrees stay unreadable to sibling uids. Host-written files stay root-owned between spawns and are still processed. `chown_tree_linux_test.go`; `TestConfinement_CannotAttachAnotherOrgsDatabase` re-verified. multi-org `0515939` |
+| §4.3 M1 accept error kills mail listeners | `acceptLoop` retries transient errors with capped exponential backoff (5ms→1s, reset on success), exits only on shutdown/`net.ErrClosed`, and stays responsive to Shutdown mid-backoff. Two red-first tests in `mailrouter_test.go`. multi-org `3da239d` |
+| §4.3 M9 switcher cookie carries attacker URL | Entries are `{slug, name}` only; slugs validated as single lowercase DNS labels on both parsers; the client derives `https://<slug>.<parent-of-current-hostname>` (`orgUrlForSlug`) — data the cookie cannot influence. Legacy `url` fields parse and are shed. multi-org `1265031` (orgcookie + serve-org + e2e pin), tinycld `56751db` (org-cookie.ts, useUserOrgs) |
+
 ### Still open
 - **§6: `readonly` server-side enforcement** — the level is now surfaced and
   `none` is gated in the UI, but nothing server-side rejects writes for a
@@ -554,10 +567,12 @@ covered by a passing test.
     than a PR comment~~ (**DONE** — `CLAUDE.md` records the decision and
     `1000000000_refuse_legacy_org_database.js` enforces it, tinycld `01384c1`)
 
-**Tier 4 — before a real production day:** H4 admission control + LRU;
-M2 wrap load errors and log them (the difference between diagnosing a broken
-store in a minute and never diagnosing it); M3 stop chowning storage per spawn;
-M1 mail listener backoff; M9 drop `url` from the switcher cookie.
+**Tier 4 — before a real production day:** items are **DONE** (see "Tier 4
+operational hardening — done" above).
+~~H4 admission control + LRU; M2 wrap load errors and log them (the
+difference between diagnosing a broken store in a minute and never diagnosing
+it); M3 stop chowning storage per spawn; M1 mail listener backoff; M9 drop
+`url` from the switcher cookie.~~
 
 **Fast-follow:** ~~§5 default `onError` in the `useMutation` wrapper~~ (**DONE**,
 tinycld `77f3332`); ~~§6 last-owner guards and mail member RLS~~ (**DONE**,
