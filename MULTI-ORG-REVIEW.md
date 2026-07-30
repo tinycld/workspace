@@ -59,14 +59,13 @@ mail #42, calendar #29, drive #48, contacts #25) — all checks green.
 | §7 F1 WebDAV temp collision | `persistWrite` renames into a per-upload `os.MkdirTemp` dir instead of the shared process temp dir. Same test file (the concurrent case failed outright before) |
 | §7 F4 DAV challenge throttling | Fixed in `davauth` rather than per-route: a credential-less request is excluded from the limiter entirely, so CalDAV/WebDAV get what carddav's route-level challenge-first ordering already gave it. `davauth/challenge_throttle_test.go` |
 | §8 fresh-provisioning guard | `core/server/pb_migrations/1000000000_refuse_legacy_org_database.js` — sorts before every other migration, throws naming the legacy collection (`user_org`/`orgs`) if one exists. `coreserver/fresh_provision_guard_test.go` (red-first) also pins the sorts-first ordering. tinycld `01384c1` |
+| §5 silent mutation failures | Default `onError` in the `useMutation` wrapper (`core/lib/mutations.ts`): failures without an explicit handler now toast (`mutation.error`) + `captureException`; an explicit `onError` replaces the default, so form handlers behave as before. Red-first tests in `mutations.test.tsx`; guidance added to `CONTRIBUTING.md`. tinycld `77f3332` |
 
 Verified: `go test ./...` green in core/server, mail, calendar, drive, contacts;
 `tinycld-pkg check` (biome + tsc + vitest) green in all four features; gofmt
 clean (also fixed pre-existing import-order drift in `drive/server/register.go`).
 
 ### Still open
-- **§5 silent mutation failures** — one default `onError` in the `useMutation`
-  wrapper covers ~36 call sites.
 - **§6 last-owner guards, mail member RLS** — both have correct reference
   implementations elsewhere in the codebase to copy.
 - **§9** — the help topics (calendar CalDAV setup, IMAP username guidance)
@@ -553,8 +552,8 @@ M2 wrap load errors and log them (the difference between diagnosing a broken
 store in a minute and never diagnosing it); M3 stop chowning storage per spawn;
 M1 mail listener backoff; M9 drop `url` from the switcher cookie.
 
-**Fast-follow:** §5 default `onError` in the `useMutation` wrapper (one fix, ~36
-call sites); §6 last-owner guards and mail member RLS (both have correct
+**Fast-follow:** ~~§5 default `onError` in the `useMutation` wrapper~~ (**DONE**,
+tinycld `77f3332`); §6 last-owner guards and mail member RLS (both have correct
 reference implementations already in the codebase to copy); B5/B6/B7
 interstitials and a mail-hostname UI panel; §9 help topics — especially
 calendar's missing CalDAV setup topic and the IMAP username guidance, which is
