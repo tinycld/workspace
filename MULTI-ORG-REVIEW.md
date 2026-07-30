@@ -45,7 +45,8 @@ Also fixed, found while getting CI green (not in the original review):
 ### Tier 3 security — done 2026-07-29
 
 All six items are fixed, each with a test confirmed red against the prior code
-first. Not yet committed or pushed.
+first. Committed and pushed to the five open `multi-org` PRs (tinycld #138,
+mail #42, calendar #29, drive #48, contacts #25) — all checks green.
 
 | Item | Fix |
 |---|---|
