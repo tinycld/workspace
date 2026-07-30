@@ -9,6 +9,7 @@ overrides:
   '@sentry/react-native': 7.11.0
   '@shopify/flash-list': 2.0.2
   '@tanstack/db': 0.6.8
+  '@tanstack/react-db': 0.1.86
   '@tanstack/react-query': 5.101.0
   expo: 55.0.26
   expo-image: 55.0.11
@@ -45,7 +46,7 @@ importers:
         specifier: 0.6.8
         version: 0.6.8(typescript@5.9.3)
       '@tanstack/react-db':
-        specifier: '>=0.1'
+        specifier: 0.1.86
         version: 0.1.86(react@19.2.0)(typescript@5.9.3)
       '@tinycld/drive':
         specifier: '>=0.2.0 <0.3.0'
@@ -109,7 +110,7 @@ importers:
         specifier: 0.6.8
         version: 0.6.8(typescript@5.9.3)
       '@tanstack/react-db':
-        specifier: '>=0.1'
+        specifier: 0.1.86
         version: 0.1.86(react@19.2.0)(typescript@5.9.3)
       expo-clipboard:
         specifier: ~55.0.13
@@ -149,7 +150,7 @@ importers:
         specifier: 0.6.8
         version: 0.6.8(typescript@5.9.3)
       '@tanstack/react-db':
-        specifier: '>=0.1'
+        specifier: 0.1.86
         version: 0.1.86(react@19.2.0)(typescript@5.9.3)
       expo-router:
         specifier: 55.0.16
@@ -189,7 +190,7 @@ importers:
         specifier: 0.6.8
         version: 0.6.8(typescript@5.9.3)
       '@tanstack/react-db':
-        specifier: '>=0.1'
+        specifier: 0.1.86
         version: 0.1.86(react@19.2.0)(typescript@5.9.3)
       '@tanstack/react-query':
         specifier: 5.101.0
@@ -229,7 +230,7 @@ importers:
         specifier: 0.6.8
         version: 0.6.8(typescript@5.9.3)
       '@tanstack/react-db':
-        specifier: '>=0.1'
+        specifier: 0.1.86
         version: 0.1.86(react@19.2.0)(typescript@5.9.3)
       expo-document-picker:
         specifier: ~55.0.11
@@ -281,7 +282,7 @@ importers:
         specifier: 0.6.8
         version: 0.6.8(typescript@5.9.3)
       '@tanstack/react-db':
-        specifier: '>=0.1'
+        specifier: 0.1.86
         version: 0.1.86(react@19.2.0)(typescript@5.9.3)
       '@tanstack/react-query':
         specifier: 5.101.0
@@ -336,7 +337,7 @@ importers:
         specifier: 0.6.8
         version: 0.6.8(typescript@5.9.3)
       '@tanstack/react-db':
-        specifier: '>=0.1'
+        specifier: 0.1.86
         version: 0.1.86(react@19.2.0)(typescript@5.9.3)
       '@tanstack/react-query':
         specifier: 5.101.0
@@ -592,7 +593,7 @@ importers:
         specifier: ^1.0.36
         version: 1.0.39(@tanstack/query-core@5.101.0)(typescript@5.9.3)
       '@tanstack/react-db':
-        specifier: ^0.1.79
+        specifier: 0.1.86
         version: 0.1.86(react@19.2.0)(typescript@5.9.3)
       '@tanstack/react-query':
         specifier: 5.101.0
@@ -983,7 +984,7 @@ importers:
         specifier: 0.6.8
         version: 0.6.8(typescript@5.9.3)
       '@tanstack/react-db':
-        specifier: ^0.1.79
+        specifier: 0.1.86
         version: 0.1.86(react@19.2.0)(typescript@5.9.3)
       '@tanstack/react-query':
         specifier: 5.101.0
@@ -5952,7 +5953,7 @@ packages:
     peerDependencies:
       '@tanstack/db': 0.6.8
       '@tanstack/query-db-collection': '>=1.0.40'
-      '@tanstack/react-db': '>=0.1.86'
+      '@tanstack/react-db': 0.1.86
       '@tanstack/react-query': 5.101.0
       pocketbase: '>=0.21.0'
       react: 19.2.0
