@@ -37,6 +37,13 @@ app/server/app
 **/playwright/.cache
 **/.worktrees
 
+# ...but the vendored PocketBase fork's admin UI is a CHECKED-IN build output,
+# not a regenerable one: ui/embed.go does `//go:embed all:dist`, so the Go
+# compiler needs those files present or every stage building the fork fails with
+# "pattern all:dist: no matching files found". The `**/dist` rule above would
+# strip it from the context, so re-include it (later patterns win).
+!tinycld/third_party/pocketbase/ui/dist
+
 # Editor / OS cruft.
 **/.DS_Store
 **/.idea
