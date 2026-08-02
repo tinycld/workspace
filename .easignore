@@ -41,6 +41,16 @@ app/server/app
 **/playwright/.cache
 **/.worktrees
 
+# ...but the vendored PocketBase fork's admin UI is a CHECKED-IN build output,
+# not a regenerable one: ui/embed.go does `//go:embed all:dist`, so the Go
+# compiler needs those files present or anything building the fork fails with
+# "pattern all:dist: no matching files found". The postinstall generator builds
+# it (export-types.ts runs `go run` over core/server, which links the fork), so
+# without this the sandbox install dies before the app is ever compiled. The
+# `**/dist` rule above would strip it from the archive, so re-include it (later
+# patterns win). Mirrors the identical carve-out in .dockerignore.
+!tinycld/third_party/pocketbase/ui/dist
+
 # Editor / OS cruft.
 **/.DS_Store
 **/.idea
