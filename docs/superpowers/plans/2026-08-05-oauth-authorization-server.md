@@ -20,6 +20,15 @@
 - **No `any` in TypeScript. No `biome-ignore` comments.** Biome enforces 4-space indent, single quotes, ES5 trailing commas.
 - **Semantic Tailwind tokens only** in UI (`text-foreground`, `bg-background`) — no raw hex, light and dark must both work.
 - Go code lives in `tinycld/core/server/`; run `go test ./...` from that directory.
+- **Run `gofmt -w` on every Go file you create or edit, and confirm `gofmt -l`
+  prints nothing before committing.** `go vet` does not check formatting, so a
+  misaligned const block or map literal passes vet and still fails the repo's
+  bar. The code blocks in this plan are illustrative and are NOT guaranteed
+  gofmt-clean — several have alignment that gofmt will change (notably the
+  `Scope*` const block in Task 1 and the `collectionScopes` / TTL const blocks
+  in Task 5). Format the result; do not transcribe the plan's whitespace.
+- Always run tests with `-count=1`. A cached PASS over a non-compiling package
+  has already been reported once as success in this plan's execution.
 
 ---
 
