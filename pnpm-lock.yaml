@@ -20,6 +20,7 @@ overrides:
   react-dom: 19.2.0
   react-hook-form: 7.77.0
   react-native: 0.83.6
+  react-native-drax: github:nathanstitt/react-native-drax#989bfb605df558b7b64d3d64f392efc6f7678e15
   react-native-gesture-handler: 3.0.1
   react-native-reanimated: 4.2.1
   react-native-safe-area-context: 5.6.2
@@ -31,9 +32,6 @@ overrides:
   tailwind-variants: 0.1.20
   tailwindcss: 4.3.0
   uniwind: 1.8.0
-
-patchedDependencies:
-  react-native-drax@1.1.0: ea7a145af78796d969781a671cecc7a5a215298ff709eb9e20901b0b382f6560
 
 importers:
 
@@ -168,8 +166,8 @@ importers:
         specifier: 0.83.6
         version: 0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0)
       react-native-drax:
-        specifier: ^1.1.0
-        version: 1.1.0(patch_hash=ea7a145af78796d969781a671cecc7a5a215298ff709eb9e20901b0b382f6560)(react-native-gesture-handler@3.0.1(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native-reanimated@4.2.1(react-native-worklets@0.7.4(@babel/core@7.29.7)(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)
+        specifier: github:nathanstitt/react-native-drax#989bfb605df558b7b64d3d64f392efc6f7678e15
+        version: https://codeload.github.com/nathanstitt/react-native-drax/tar.gz/989bfb605df558b7b64d3d64f392efc6f7678e15(react-native-gesture-handler@3.0.1(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native-reanimated@4.2.1(react-native-worklets@0.7.4(@babel/core@7.29.7)(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)
     devDependencies:
       '@tinycld/package-scripts':
         specifier: '*'
@@ -251,8 +249,8 @@ importers:
         specifier: 0.83.6
         version: 0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0)
       react-native-drax:
-        specifier: ^1.1.0
-        version: 1.1.0(patch_hash=ea7a145af78796d969781a671cecc7a5a215298ff709eb9e20901b0b382f6560)(react-native-gesture-handler@3.0.1(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native-reanimated@4.2.1(react-native-worklets@0.7.4(@babel/core@7.29.7)(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)
+        specifier: github:nathanstitt/react-native-drax#989bfb605df558b7b64d3d64f392efc6f7678e15
+        version: https://codeload.github.com/nathanstitt/react-native-drax/tar.gz/989bfb605df558b7b64d3d64f392efc6f7678e15(react-native-gesture-handler@3.0.1(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native-reanimated@4.2.1(react-native-worklets@0.7.4(@babel/core@7.29.7)(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)
     devDependencies:
       '@tinycld/package-scripts':
         specifier: '*'
@@ -852,8 +850,8 @@ importers:
         specifier: ^0.24.7
         version: 0.24.9(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)
       react-native-drax:
-        specifier: ^1.1.0
-        version: 1.1.0(patch_hash=ea7a145af78796d969781a671cecc7a5a215298ff709eb9e20901b0b382f6560)(react-native-gesture-handler@3.0.1(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native-reanimated@4.2.1(react-native-worklets@0.7.4(@babel/core@7.29.7)(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)
+        specifier: github:nathanstitt/react-native-drax#989bfb605df558b7b64d3d64f392efc6f7678e15
+        version: https://codeload.github.com/nathanstitt/react-native-drax/tar.gz/989bfb605df558b7b64d3d64f392efc6f7678e15(react-native-gesture-handler@3.0.1(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native-reanimated@4.2.1(react-native-worklets@0.7.4(@babel/core@7.29.7)(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)
       react-native-external-keyboard:
         specifier: ^0.8.4
         version: 0.8.5(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)
@@ -1084,8 +1082,8 @@ importers:
         specifier: 0.83.6
         version: 0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0)
       react-native-drax:
-        specifier: ^1.1.0
-        version: 1.1.0(patch_hash=ea7a145af78796d969781a671cecc7a5a215298ff709eb9e20901b0b382f6560)(react-native-gesture-handler@3.0.1(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native-reanimated@4.2.1(react-native-worklets@0.7.4(@babel/core@7.29.7)(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)
+        specifier: github:nathanstitt/react-native-drax#989bfb605df558b7b64d3d64f392efc6f7678e15
+        version: https://codeload.github.com/nathanstitt/react-native-drax/tar.gz/989bfb605df558b7b64d3d64f392efc6f7678e15(react-native-gesture-handler@3.0.1(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native-reanimated@4.2.1(react-native-worklets@0.7.4(@babel/core@7.29.7)(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)
       react-native-external-keyboard:
         specifier: ^0.8.4
         version: 0.8.5(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)
@@ -6249,8 +6247,9 @@ packages:
       react: 19.2.0
       react-native: 0.83.6
 
-  react-native-drax@1.1.0:
-    resolution: {integrity: sha512-MBAmlMZe/sSCwq2EXdxH8Dc2Gy9y+tvRJn/EWPtAsEoRkIVWeCFg8+7q7ABkmIDLwHGobuIRVC5M6OL6+2ldgQ==}
+  react-native-drax@https://codeload.github.com/nathanstitt/react-native-drax/tar.gz/989bfb605df558b7b64d3d64f392efc6f7678e15:
+    resolution: {gitHosted: true, integrity: sha512-t+EoTvGKaMkXouqGdg65218cdK24vnRF3CRBS38wNuzodyyxM6CBSE+QmQC7esHZ5qaO90KtlJKTrubYWzmEBA==, tarball: https://codeload.github.com/nathanstitt/react-native-drax/tar.gz/989bfb605df558b7b64d3d64f392efc6f7678e15}
+    version: 1.1.0
     peerDependencies:
       react: 19.2.0
       react-native: 0.83.6
@@ -12942,7 +12941,7 @@ snapshots:
       react: 19.2.0
       react-native: 0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0)
 
-  react-native-drax@1.1.0(patch_hash=ea7a145af78796d969781a671cecc7a5a215298ff709eb9e20901b0b382f6560)(react-native-gesture-handler@3.0.1(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native-reanimated@4.2.1(react-native-worklets@0.7.4(@babel/core@7.29.7)(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0):
+  react-native-drax@https://codeload.github.com/nathanstitt/react-native-drax/tar.gz/989bfb605df558b7b64d3d64f392efc6f7678e15(react-native-gesture-handler@3.0.1(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native-reanimated@4.2.1(react-native-worklets@0.7.4(@babel/core@7.29.7)(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0):
     dependencies:
       react: 19.2.0
       react-native: 0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0)
