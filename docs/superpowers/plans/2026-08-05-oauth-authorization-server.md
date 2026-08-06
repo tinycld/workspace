@@ -29,6 +29,21 @@
   in Task 5). Format the result; do not transcribe the plan's whitespace.
 - Always run tests with `-count=1`. A cached PASS over a non-compiling package
   has already been reported once as success in this plan's execution.
+- **The device-flow endpoints must be rate limited.** `POST /oauth/token`
+  (device polling) and the `user_code` lookup are guessing surfaces reachable
+  without any credential. A user code carries ~40 bits (31^8 ≈ 8.5×10¹¹), which
+  is ample against a throttled attacker and thin against an unthrottled one.
+  Reuse the existing `core/server/davauth/ratelimit.go` primitives rather than
+  inventing a scheme, and follow `davauth`'s timing-oracle mitigation
+  (`compareAgainstDummyHash`) so an invalid grant does not return measurably
+  faster than a valid one. This applies to Tasks 6, 7, and 8.
+- **Every per-request authorization path must reject a disabled user.**
+  `coreserver/disabled_guard.go` binds `OnRecordAuthRequest`, which is the token
+  *issuance* tail; PocketBase's per-request `loadAuthToken` never fires it. So a
+  disabled user's already-issued OAuth token would keep working forever unless
+  the grant check rejects it. `VerifyGrant` owns this check (see
+  `davauth.go:92` for the same cutoff on DAV/IMAP/SMTP); anything calling
+  `VerifyGrant` inherits it and must not duplicate or bypass it.
 
 ---
 
