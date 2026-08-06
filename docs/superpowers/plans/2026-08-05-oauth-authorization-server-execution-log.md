@@ -680,3 +680,78 @@ claim myself (mutate the fix, watch the test go red) before accepting DONE.
 Also: plan-supplied test code can itself be the defect — my brief's test was
 vacuous, and the reviewer, not the plan, was right.
 
+
+================================================================================
+DEFERRED-ITEM CLEANUP (2026-08-06, follow-up session)
+
+All four deferred items closed, plus the migration-prefix observation.
+
+1. CLIENT KILL SWITCH — done (commit 7c8ae84). oauth_clients.disabled,
+   enforced in BOTH halves:
+     - FindClientByClientID: the chokepoint all three mint/exchange entry
+       points (handleAuthorize, handleDeviceAuthorization, handleToken)
+       already resolved through, so no new call sites were needed.
+     - VerifyGrant: the per-request cutoff, sitting directly beside the
+       existing disabled-USER check, which was the exact precedent — same
+       shape, same ErrInvalidGrant, same "must not be distinguishable from
+       revoked" reasoning.
+   Deciding factor for doing both halves: a kill switch that only blocks NEW
+   authorization leaves a compromised client's live tokens valid until
+   expiry, which is most of what you'd flip the switch FOR.
+   Sense is `disabled` not `enabled` so the zero value is "working" — a bool
+   that failed to write cannot leave a client wrongly dead.
+   Mutation-verified in both directions, and the two mutations were
+   independent: removing the front half turned ONLY the front-half test red,
+   confirming neither check masks the other. First attempt at the back-half
+   mutation didn't compile (deleting the block orphaned `client`), which
+   proves nothing — redone as `&& false` to get a build that actually runs.
+
+2. DUMMY-HASH TIMING MITIGATION — done (commit 22102ee). The real leak was
+   not the one the spec described. VerifyClientSecret's early return on an
+   empty stored hash is minor; the significant one was authenticateClient
+   returning on an unresolvable client_id BEFORE any hash work, which the
+   kill switch had just made more interesting (it now also distinguishes
+   "switched off"). Both closed.
+   Written up honestly as weaker than davauth's namesake rather than
+   presented as equivalent: davauth spends BCRYPT cost against a measured
+   ~700x gap; this is SHA-256, where the absolute difference is near the
+   noise floor. It removes the BRANCH, not a cost gap. The rate limiter is
+   what actually bounds averaging out a signal this small — the comment says
+   so, so nobody later mistakes this for load-bearing.
+   Found while doing it: the confidential-client path had NO test coverage
+   whatsoever (the only registered client is the public CLI, which skips
+   secret verification entirely). Added clients_test.go, including the
+   misconfiguration case — confidential + no stored hash must reject every
+   secret rather than accept any — which is also the branch the dummy
+   compare sits on. Mutation-verified.
+
+3. schema_test.go INDEX MIRROR — already closed, as suspected. Verified
+   directly: schema_test.go carries idx_oauth_grants_user_code with the
+   correct partial-UNIQUE predicate. The log entry predated the fix wave.
+
+4. THREE IDENTICAL COMMIT MESSAGES — closed at the time (squashed).
+
+5. MIGRATION PREFIX COLLISION — fixed (commit 0c723c6), upgraded from
+   "non-blocking observation" after checking the actual mechanism. The
+   generator SYMLINKS every package's pb-migrations into one flat directory
+   (server/pb_migrations/), so prefixes are a single GLOBAL namespace, not a
+   per-package one. Renamed oauth to 1985000000/1985000001; cards keeps
+   1980000000/1. Safe only because these are unreleased and the branch is
+   unmerged — a released migration can never be renamed, since an applied
+   one never re-runs and the rename would silently never apply.
+   Left alone deliberately: the plan document's references to the old
+   filenames. It is a record of what was executed, not a live reference.
+
+VERIFICATION: gofmt -l silent, go vet clean, go build ./... ok,
+go test ./oauth/ ./coreserver/ -count=1 green (incl. composition parity),
+tsc --noEmit clean, 739/739 TS unit tests, biome clean over 616 files.
+pbSchema.ts regenerated — `disabled` propagated, which also confirms the
+renamed migrations are picked up by the generator.
+
+LESSON: "cosmetic drift" deserves one check of the mechanism before being
+filed as cosmetic. The prefix collision looked harmless because filenames
+differ and ordering stays deterministic — true, but it was reasoned about as
+if each package had its own migration namespace. One `ls -la` of the
+symlinked directory showed the namespace is shared. The conclusion (ship it)
+was right for the wrong reason, and the right reason came with a cheap fix
+that was only cheap because nothing had shipped yet.
