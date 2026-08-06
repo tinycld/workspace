@@ -3554,13 +3554,35 @@ git commit -m "feat(oauth): device-approval consent screen"
 ## Task 12: Connected apps — list and revoke
 
 **Files:**
+- Create: `tinycld/core/server/oauth/grants_endpoint.go` — the session-authenticated revoke endpoint
 - Create: `tinycld/core/components/settings/ConnectedAppsSection.tsx`
+- Modify: `tinycld/core/server/oauth/register.go` — register the new route
 - Modify: `tinycld/app/(app)/settings/personal.tsx`
-- Test: `tinycld/core/tests/unit/connected-apps.test.tsx`
+- Test: `tinycld/core/server/oauth/grants_endpoint_test.go`, `tinycld/core/tests/unit/connected-apps.test.tsx`
 
 **Interfaces:**
-- Consumes: the `oauth_grants` list rule (a user may read their own rows), `POST /oauth/revoke`
-- Produces: the revocation UI the spec's verification step exercises
+- Consumes: the `oauth_grants` list rule (a user may read their own rows)
+- Produces: `POST /oauth/grants/{id}/revoke` and the revocation UI
+
+**A new endpoint is required — `/oauth/revoke` cannot serve this screen.**
+RFC 7009's endpoint takes a *token*: it parses a JWT for the `tcg` claim, or
+hashes the value and matches `refresh_token_hash`. The Connected apps screen
+holds neither — it lists grant *rows*, and the browser session has no access to
+a CLI's tokens. Passing `grant.jti` would match neither branch, and because
+RFC 7009 mandates 200 for an unknown token, the button would silently do
+nothing while reporting success.
+
+So add `POST /oauth/grants/{id}/revoke`, authenticated by the ordinary user
+session:
+- Reject when `re.Auth == nil` (401).
+- Load the grant by id; 404 when absent.
+- **Reject when `grant.user != re.Auth.Id` (403)** — without this, any signed-in
+  user could revoke anyone else's grant by id. This is the security property of
+  the task; test it explicitly.
+- Otherwise call `RevokeGrant`, which already clears all four credential
+  columns (Task 4), and return 200.
+- Register it in `Register` alongside the other routes. It is session-
+  authenticated, unlike `/oauth/revoke`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -3635,11 +3657,8 @@ export function ConnectedAppsSection() {
     )
 
     const revoke = useMutation({
-        mutationFn: async (refreshHint: string) => {
-            const body = new FormData()
-            body.append('token', refreshHint)
-            body.append('client_id', 'tinycld-cli')
-            await pb.send('/oauth/revoke', { method: 'POST', body })
+        mutationFn: async (grantID: string) => {
+            await pb.send(`/oauth/grants/${grantID}/revoke`, { method: 'POST' })
         },
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ['oauth_grants'] }),
         onError: (err: unknown) => captureException('oauth.revoke', err),
