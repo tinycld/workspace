@@ -1,8 +1,8 @@
 diff --git a/lib/module/SortableBoardContainer.js b/lib/module/SortableBoardContainer.js
-index a8499b8b6843b5a0d6108e58ca986e43dd2a40e4..c0f60ae4b9ea7e82de98d447d47d7971f4727f52 100644
+index a8499b8b6843b5a0d6108e58ca986e43dd2a40e4..5d99bf963d12af0652908c61d11c430b865f55f5 100644
 --- a/lib/module/SortableBoardContainer.js
 +++ b/lib/module/SortableBoardContainer.js
-@@ -322,6 +322,16 @@ export const SortableBoardContainer = ({
+@@ -322,6 +322,22 @@ export const SortableBoardContainer = ({
          return snapTarget;
        }
      }
@@ -12,18 +12,24 @@ index a8499b8b6843b5a0d6108e58ca986e43dd2a40e4..c0f60ae4b9ea7e82de98d447d47d7971
 +    // finalize can emit a second, cancelled drag-end after the normal one —
 +    // on web the dragged id intentionally stays set through the snap, so the
 +    // duplicate passes useDragGesture's guard. Reinjecting here would undo
-+    // the drop; ignore the stale event instead.
++    // the drop; ignore the stale event instead. Returning the phantom snap
++    // target again matters: an undefined response resolves to the DEFAULT
++    // snap target — the dragged view's ORIGINAL position — and restarts the
++    // in-flight snap animation toward the source column, so the hover copy
++    // visibly flies home before the transfer commits in the target.
 +    if (cancelled && transfer?.targetId && !sourceInfoRef.current) {
-+      return draxViewProps?.onMonitorDragEnd?.(eventData);
++      draxViewProps?.onMonitorDragEnd?.(eventData);
++      const staleTarget = columns.get(transfer.targetId);
++      return staleTarget ? staleTarget.getPhantomSnapTarget() : undefined;
 +    }
      if (transfer) {
        // Cancelled or no target — clear phantom and reinject
        if (transfer.targetId) {
 diff --git a/src/SortableBoardContainer.tsx b/src/SortableBoardContainer.tsx
-index 1ef725e6d18979e815a541b2289f9d9815f24661..5442a949d39eb019d485383960a23374c6d607ab 100644
+index 1ef725e6d18979e815a541b2289f9d9815f24661..5dd78eaac4b52e48fe0d0112fa450292b4f25ad8 100644
 --- a/src/SortableBoardContainer.tsx
 +++ b/src/SortableBoardContainer.tsx
-@@ -365,6 +365,17 @@ export const SortableBoardContainer = <TItem,>({
+@@ -365,6 +365,23 @@ export const SortableBoardContainer = <TItem,>({
        }
      }
  
@@ -33,9 +39,15 @@ index 1ef725e6d18979e815a541b2289f9d9815f24661..5442a949d39eb019d485383960a23374
 +    // finalize can emit a second, cancelled drag-end after the normal one —
 +    // on web the dragged id intentionally stays set through the snap, so the
 +    // duplicate passes useDragGesture's guard. Reinjecting here would undo
-+    // the drop; ignore the stale event instead.
++    // the drop; ignore the stale event instead. Returning the phantom snap
++    // target again matters: an undefined response resolves to the DEFAULT
++    // snap target — the dragged view's ORIGINAL position — and restarts the
++    // in-flight snap animation toward the source column, so the hover copy
++    // visibly flies home before the transfer commits in the target.
 +    if (cancelled && transfer?.targetId && !sourceInfoRef.current) {
-+      return draxViewProps?.onMonitorDragEnd?.(eventData);
++      draxViewProps?.onMonitorDragEnd?.(eventData);
++      const staleTarget = columns.get(transfer.targetId);
++      return staleTarget ? staleTarget.getPhantomSnapTarget() : undefined;
 +    }
 +
      if (transfer) {
