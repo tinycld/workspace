@@ -755,3 +755,72 @@ if each package had its own migration namespace. One `ls -la` of the
 symlinked directory showed the namespace is shared. The conclusion (ship it)
 was right for the wrong reason, and the right reason came with a cheap fix
 that was only cheap because nothing had shipped yet.
+
+================================================================================
+ADMIN CLIENT SURFACE (2026-08-06, same follow-up session)
+
+Closes the gap flagged when the kill switch landed: oauth_clients.disabled had
+enforcement but no operator surface, so using it meant hand-editing a record in
+the PocketBase admin — the worst possible workflow at the exact moment you are
+reacting to a compromised integration.
+
+ARCHITECTURAL CONSTRAINT that shaped everything: oauth_clients has every API
+rule null (superuser-only), so there is NO client-side query path. useOrgLiveQuery
+was impossible; this had to be Go endpoints. Two consequences:
+  - The response is a hand-built projection (AdminClientView), not PublicExport.
+    On oauth_grants, `hidden: true` does the redaction; on this collection
+    nothing does, because PublicExport is never exercised. The projection IS
+    the protection for client_secret_hash, so it got its own test — asserting
+    on the RAW WIRE BYTES, not a decoded struct, since decoding into the view
+    type would swallow an unexpected field silently.
+  - The list does not update itself (no realtime subscription), so the mutation
+    invalidates on settle rather than on success: a FAILED write also leaves
+    the local list possibly out of step.
+
+AUTHZ: session + admin, three checks. rejectOAuthToken is the one that matters
+— these routes are the kill switch itself, so a bearer token reaching them
+could disable whatever would detect it or re-enable itself. Tested with a real
+token minted for an ADMIN (the strongest form of the attack), not an anonymous
+or under-scoped one. Routes deliberately left in DEFAULT-DENY in the scope
+table, and route_classification_test.go extended in both directions — including
+a separate GET assertion, since GET is classified independently of POST and a
+read-side exemption would leak the whole registry.
+
+DESIGN DECISIONS worth keeping:
+  - The endpoint takes a DESIRED STATE, not a toggle. A toggle derives the new
+    value from what the caller last read, so two admins on a stale list each
+    flip it and land on the opposite of what both intended. Idempotent, and a
+    test pins that.
+  - Disabling does NOT revoke grants. Rows stay, VerifyGrant refuses them while
+    the client is off, so re-enabling restores the integration instead of
+    forcing every user to reconnect. That reversibility is what makes it safe
+    to hit the switch first and investigate after — so it is pinned by a test
+    (grant survives AND its token stops working), because a future change that
+    started revoking would be a product decision, not an implementation detail.
+  - Only DISABLING confirms; re-enabling is immediate. Gating the undo would
+    discourage reversing a mistaken disable.
+  - The row shows the live connection count, and the confirmation names it:
+    that number is the blast radius of the switch.
+
+TESTING FRICTION worth recording: the three UI interaction tests could not be
+written. react-native's Pressable is stubbed as a plain string tag
+(tests/react-native-stub.cjs), so onPress lands as a DOM ATTRIBUTE and never
+becomes a handler — no synthetic click can drive the Switch, in this or any
+existing unit test (there is no fireEvent precedent in the repo; every current
+unit test is render-only). Rather than fake an interaction or assert on
+something weaker while implying coverage, the decision logic was EXTRACTED to
+planToggle() and asserted directly. That is also better by the style guide
+(logic out of the component), but the honest framing is that the extraction was
+forced by the harness, and the comment on planToggle says so.
+
+VERIFICATION: gofmt -l silent, go vet clean, go build ./... ok,
+go test ./oauth/ ./coreserver/ -count=1 green, tsc --noEmit clean,
+754/754 TS unit tests (was 739), biome clean.
+Mutation-verified: dropping rejectOAuthToken, neutering the role check, and
+leaking client_secret_hash each turn their own test red.
+
+STILL NOT BUILT (deliberate): client REGISTRATION. No create/edit/delete —
+adding a client is still a migration or superuser concern. Registration needs
+secret display-once handling and redirect-URI validation, and its shape depends
+on what Zapier actually requires, so building it now would be speculative.
+The kill switch was the part that had enforcement but no operator surface.
