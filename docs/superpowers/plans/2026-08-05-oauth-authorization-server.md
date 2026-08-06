@@ -33,10 +33,19 @@
   (device polling) and the `user_code` lookup are guessing surfaces reachable
   without any credential. A user code carries ~40 bits (31^8 ≈ 8.5×10¹¹), which
   is ample against a throttled attacker and thin against an unthrottled one.
-  Reuse the existing `core/server/davauth/ratelimit.go` primitives rather than
-  inventing a scheme, and follow `davauth`'s timing-oracle mitigation
-  (`compareAgainstDummyHash`) so an invalid grant does not return measurably
-  faster than a valid one. This applies to Tasks 6, 7, and 8.
+  **`davauth`'s primitives cannot be reused as-is** — investigated during Task
+  6: `TooManyFailures`/`NoteFailure`/`NoteSuccess` derive their identifier from
+  `r.BasicAuth()`, and `isChallenge` treats any request without Basic
+  credentials as an unthrottled challenge, so every OAuth request would bypass
+  the limiter. The underlying `throttle` type is also unexported. The options
+  are to export a credential-agnostic throttle from `davauth` (keyed on an
+  arbitrary identifier string rather than the Basic user), or to give `oauth`
+  its own small throttle modelled on it. Decide when implementing **Task 7**,
+  which owns `POST /oauth/token` — that is the endpoint where a `device_code`
+  or `user_code` is actually *guessed*. Task 6 only mints codes and consumes no
+  guesses, so it needs no limiter.
+  Also follow `davauth`'s timing-oracle mitigation (`compareAgainstDummyHash`)
+  so an invalid grant does not return measurably faster than a valid one.
 - **Every per-request authorization path must reject a disabled user.**
   `coreserver/disabled_guard.go` binds `OnRecordAuthRequest`, which is the token
   *issuance* tail; PocketBase's per-request `loadAuthToken` never fires it. So a
