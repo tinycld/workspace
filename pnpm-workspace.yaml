@@ -69,7 +69,7 @@ overrides:
   react-dom: 19.2.0
   react-hook-form: 7.77.0
   react-native: 0.83.6
-  react-native-drax: github:nathanstitt/react-native-drax#989bfb605df558b7b64d3d64f392efc6f7678e15
+  react-native-drax: github:nathanstitt/react-native-drax#e9b5dcdb9217cdb0ad47c5db779e51588dd9dfe0
   react-native-gesture-handler: 3.0.1
   react-native-reanimated: 4.2.1
   react-native-safe-area-context: 5.6.2
