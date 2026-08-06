@@ -356,8 +356,10 @@ func newSchemaApp(t testing.TB) *tests.TestApp {
 	}
 
 	grants := core.NewBaseCollection(grantsCollection)
+	// Deliberately NOT Required — a pending device grant has no user until
+	// approval. See the migration's comment on og_user.
 	grants.Fields.Add(&core.RelationField{
-		Name: "user", Required: true, MaxSelect: 1,
+		Name: "user", Required: false, MaxSelect: 1,
 		CollectionId: users.Id, CascadeDelete: true,
 	})
 	grants.Fields.Add(&core.RelationField{
@@ -526,11 +528,20 @@ migrate(
             updateRule: null,
             deleteRule: null,
             fields: [
+                // NOT required: the device flow (RFC 8628) creates a PENDING
+                // grant BEFORE any user is known — the user is bound when they
+                // approve in the browser. PocketBase's RelationField.Validate-
+                // Value returns ErrRequired for an empty required relation, so
+                // marking this required would make the device flow unable to
+                // store its own pending row. The invariant is enforced in Go
+                // instead: VerifyGrant only accepts status "active", and a
+                // grant only reaches "active" through approval, which sets the
+                // user.
                 {
                     id: 'og_user',
                     name: 'user',
                     type: 'relation',
-                    required: true,
+                    required: false,
                     collectionId: users.id,
                     cascadeDelete: true,
                     maxSelect: 1,
@@ -3822,4 +3833,12 @@ git commit -m "docs(oauth): help topic for connected apps and CLI login"
 
 **Deferred to plan C.** `GET /api/cli/downloads`, the cross-compile pipeline step, and the About-panel download block are CLI distribution, not OAuth.
 
-**Known follow-up.** Task 6 stores a pending device grant with an empty `user` relation, which the migration marks `required: true`. If PocketBase rejects an empty required relation on save, drop `required` from the `og_user` field in the migration (it is enforced in Go at approval time either way). Verify at Task 6 Step 6 and adjust the migration before it is released.
+**Resolved before execution.** The pre-flight scan confirmed against
+`core/field_relation.go:198` that PocketBase's `RelationField.ValidateValue`
+returns `validation.ErrRequired` for an empty required relation. Task 6 stores
+a pending device grant with no user, so `og_user` is declared `required: false`
+in both the migration and the test helper, with the invariant enforced in Go
+(`VerifyGrant` accepts only `status == "active"`, and only approval sets both).
+Task 6 also sets `grant.Set("expires_at", …)` — note that a pending grant's
+`expires_at` is the DEVICE CODE deadline; `issueTokens` overwrites it with the
+refresh-token deadline on exchange.
