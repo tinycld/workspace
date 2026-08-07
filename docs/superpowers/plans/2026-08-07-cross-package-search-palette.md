@@ -1119,13 +1119,19 @@ func TestOwnerScopeClause(t *testing.T) {
 }
 
 func TestMemberScopeClause(t *testing.T) {
+	// MemberField and RecordField are deliberately DIFFERENT here so that
+	// swapping them in clause() changes the emitted SQL and fails this test.
+	// The real cards config uses "project" for both (that is how the schema is
+	// shaped) — with matching values a field swap is invisible, which would
+	// leave the only consumer of MemberScope untested against a bug that
+	// scopes on the wrong column.
 	s := MemberScope{
 		Table:       "cards_project_members",
-		MemberField: "project",
+		MemberField: "proj_id",
 		UserField:   "user",
 		RecordField: "project",
 	}
-	want := "c.project IN (SELECT project FROM cards_project_members WHERE user = {:scopeUser})"
+	want := "c.project IN (SELECT proj_id FROM cards_project_members WHERE user = {:scopeUser})"
 	if got := s.clause(); got != want {
 		t.Errorf("clause() = %q, want %q", got, want)
 	}
