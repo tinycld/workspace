@@ -313,7 +313,10 @@ import type { ParsedQuery } from './types'
 // supported: every backend already strips them (core/fts sanitize.go), and
 // passing incomplete expressions like `foo AND ` through to FTS5 turns a
 // half-typed query into a parse error under search-as-you-type.
-const OPERATOR_WORDS = /\b(AND|OR|NOT)\b/g
+// Bounded by whitespace or string edge, NOT \b: `\b` treats `-` as a word
+// boundary, so `plan-NOT-final.docx` would split into `plan-` and `-final.docx`
+// and the filename's own text would become an exclusion.
+const OPERATOR_WORDS = /(^|\s)(AND|OR|NOT)(?=\s|$)/g
 const OPERATOR_CHARS = /[&|!"'()]/g
 
 /**
@@ -329,7 +332,9 @@ export function parseQuery(input: string, installedSlugs: string[]): ParsedQuery
     const include: string[] = []
     const exclude: string[] = []
 
-    const cleaned = input.replace(OPERATOR_WORDS, ' ').replace(OPERATOR_CHARS, ' ')
+    // '$1 ' keeps the captured leading separator so two adjacent operator
+    // words ('a AND OR b') both strip rather than the second surviving.
+    const cleaned = input.replace(OPERATOR_WORDS, '$1 ').replace(OPERATOR_CHARS, ' ')
 
     for (const rawToken of cleaned.split(/\s+/)) {
         const token = rawToken.trim()
@@ -351,7 +356,9 @@ export function parseQuery(input: string, installedSlugs: string[]): ParsedQuery
         // split on whitespace first, any hyphen still inside a token is
         // mid-token by construction (budget-2026) and stays literal.
         if (token.startsWith('-')) {
-            const term = token.slice(1)
+            // Strip every leading hyphen, not just one: '--draft' should
+            // exclude 'draft', not the literal '-draft'.
+            const term = token.replace(/^-+/, '')
             if (term) exclude.push(term)
             continue
         }
