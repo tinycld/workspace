@@ -332,9 +332,10 @@ export function parseQuery(input: string, installedSlugs: string[]): ParsedQuery
     const include: string[] = []
     const exclude: string[] = []
 
-    // '$1 ' keeps the captured leading separator so two adjacent operator
-    // words ('a AND OR b') both strip rather than the second surviving.
-    const cleaned = input.replace(OPERATOR_WORDS, '$1 ').replace(OPERATOR_CHARS, ' ')
+    // '$1' keeps the captured leading separator. The trailing side is a
+    // zero-width lookahead, so it is never consumed and two adjacent operator
+    // words ('a AND OR b') both strip.
+    const cleaned = input.replace(OPERATOR_WORDS, '$1').replace(OPERATOR_CHARS, ' ')
 
     for (const rawToken of cleaned.split(/\s+/)) {
         const token = rawToken.trim()
