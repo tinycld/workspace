@@ -54,9 +54,11 @@ google-play-service-account.json
 /multi-org/
 /org-github/
 /pocketbase/
+/shortcut-stub/
 /text/
 /tinycld-cli-wt/
 /tinycld-oauth-ui/
+/tinycld-payloads-wt/
 /tinycld/
 /utils/
 /web/
