@@ -25,6 +25,13 @@
 - Run `pnpm install` only at the workspace root, never inside a member.
 - Migrations: released ones are frozen. New schema ships as a NEW migration file.
 - Go tests: `go test -count=1` (the cache does not invalidate on migration changes).
+- **The positive-term gate (all FTS adapters).** Never emit an FTS5 `NOT` clause
+  unless that same query already carries at least one positive term. FTS5 errors
+  on a NOT-only MATCH expression — there is nothing to subtract from — so an
+  exclude-only query must yield an empty query, never a bare `NOT`. This is not
+  theoretical: mail shipped a "doesn't have" filter and had to remove it for
+  exactly this reason (commit `dc988fd`). `core/fts` enforces it centrally;
+  drive and mail each enforce it in their own copy.
 
 ---
 
@@ -1790,13 +1797,39 @@ git -C cards commit -m "feat(search): index cards for full-text search"
 **Files:**
 - Modify: `mail/server/search.go` (`buildThreadFTSQuery`, `buildMessageFTSQuery`)
 - Modify: `mail/server/endpoints_search.go` (read the `not` param)
+- Modify: `mail/server/search_advanced_test.go` — **amend** the existing
+  `"never emits a NOT clause"` subtest (see below); do NOT delete it
 - Test: `mail/server/search_negation_test.go`
 
 **Interfaces:**
 - Consumes: nothing (mail keeps its own engine)
-- Produces: mail's `/api/mail/search` honors `?not=`
+- Produces: mail's `/api/mail/search` honors `?not=`, **gated on a positive term**
 
 **This is the highest-risk task in the plan.** Mail unions two FTS indexes. A negation applied to only one arm silently returns the rows the user asked to exclude, via the other arm.
+
+**This task reintroduces a feature mail deliberately removed.** Commit `dc988fd`
+(2026-06-04) dropped a "doesn't have" NOT filter because *"FTS5 NOT-only queries
+error without a positive term"*, and left a regression guard behind:
+`search_advanced_test.go` asserts `buildMessageFTSQuery` **never** emits a `NOT`
+clause. Reintroducing exclusion is only safe because of the positive-term gate
+in `appendExclusions`.
+
+That guard must be **amended, not deleted** — it still encodes a real
+constraint. Rewrite it to assert the gate rather than a blanket prohibition:
+
+- no positive term (e.g. `buildMessageFTSQuery("", "", exclude)`) → **no `NOT`
+  in the output**, exactly as the original guard demanded
+- positive term present → `NOT` clauses **are** expected
+
+Keep the original cases that have no positive term passing unchanged, and
+preserve the comment explaining why a NOT-only query is illegal, updating it to
+describe the gate. Anyone reading it later must be able to tell that the
+prohibition was narrowed deliberately, not weakened by accident.
+
+**The gate is an ecosystem-wide invariant, not a mail quirk:** every FTS adapter
+must refuse to emit a `NOT` without a positive term. `core/fts` already does
+(`SanitizeQueryWithExclusions` returns `""` when the include side is empty), so
+cards and contacts inherit it; drive gets it in Task 11.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1857,6 +1890,15 @@ In `mail/server/search.go`, add the exclusion helper and thread it into both bui
 // appendExclusions adds a NOT clause per excluded term. Applied to EVERY arm of
 // the search UNION: an exclusion missing from one arm lets that arm return the
 // rows the user asked to exclude.
+//
+// THE POSITIVE-TERM GATE: never emit a NOT unless `base` already carries at
+// least one positive term. FTS5 errors on a NOT-only MATCH expression — there
+// is no result set to subtract from. Mail shipped a "doesn't have" filter once
+// and had to remove it for exactly this reason (commit dc988fd, 2026-06-04,
+// "FTS5 NOT-only queries error without a positive term"), leaving behind the
+// regression guard in search_advanced_test.go. Returning `base` unchanged when
+// it is empty is what makes reintroducing exclusion safe. Do not "simplify"
+// this guard away.
 func appendExclusions(base, exclude string) string {
 	if base == "" {
 		return ""
@@ -1917,6 +1959,14 @@ git -C mail commit -m "feat(search): honor term exclusions in both search arms"
 - Produces: drive's `/api/drive/search` honors `?not=`
 
 Drive carries its own copy of `sanitizeFTSQuery` — a second instance of the drift that motivates eventually folding drive onto `core/fts`.
+
+**The positive-term gate applies here too.** Every FTS adapter in the ecosystem
+must refuse to emit a `NOT` clause unless the same query already has at least
+one positive term: FTS5 errors on a NOT-only MATCH expression. `core/fts`
+enforces it for cards and contacts, mail gets it in Task 10, and
+`TestExcludeOnlyReturnsEmpty` below is drive's enforcement. Mail learned this
+the hard way — it removed an entire "doesn't have" filter over it (commit
+`dc988fd`). Keep that test even if the implementation looks obviously correct.
 
 - [ ] **Step 1: Write the failing test**
 
