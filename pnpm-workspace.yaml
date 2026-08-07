@@ -27,6 +27,7 @@ packages:
   - text
   - calc
   - calendar
+  - cards
   - google-takeout-import
 
 # Per-package build-script approvals. pnpm blocks dependency install/postinstall
@@ -35,6 +36,9 @@ packages:
 allowBuilds:
   esbuild: true
   '@sentry/cli': true
+  # The drax fork installs from git, so its prepare (bob build) must run to
+  # produce lib/ for node consumers (Metro reads src/ regardless).
+  react-native-drax: true
 
 # pnpm 11.3 ships a default minimumReleaseAge supply-chain gate (~24h) that
 # rejects very freshly-published versions. We don't use it — disable it so a
@@ -65,6 +69,7 @@ overrides:
   react-dom: 19.2.0
   react-hook-form: 7.77.0
   react-native: 0.83.6
+  react-native-drax: github:nathanstitt/react-native-drax#7966ff5e339ab7ee59f712fb1b1f0e806fb6ba6e
   react-native-gesture-handler: 3.0.1
   react-native-reanimated: 4.2.1
   react-native-safe-area-context: 5.6.2
