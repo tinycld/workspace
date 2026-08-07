@@ -1271,7 +1271,12 @@ func excludeClause(cfg Config) string {
 // isDisabled reports whether the user record is missing or flagged disabled.
 // A missing record is treated as disabled: a token for a deleted user must not
 // keep reading.
-func isDisabled(app *pocketbase.PocketBase, userID string) bool {
+// Takes core.App (the interface), NOT the concrete *pocketbase.PocketBase:
+// tests.NewTestApp() returns *tests.TestApp, and the two do not interconvert,
+// so a concrete parameter makes this security check untestable. Drive already
+// uses core.App for the same reason (drive/server/search.go:130). `Search`
+// itself must be widened the same way.
+func isDisabled(app core.App, userID string) bool {
 	user, err := app.FindRecordById("users", userID)
 	if err != nil || user == nil {
 		return true
