@@ -46,6 +46,7 @@ google-play-service-account.json
 /bootstrap/
 /calc/
 /calendar/
+/cards/
 /contacts/
 /drive/
 /google-takeout-import/
@@ -53,8 +54,8 @@ google-play-service-account.json
 /multi-org/
 /org-github/
 /pocketbase/
+/shortcut-stub/
 /text/
-/tinycld-payloads-wt/
 /tinycld/
 /utils/
 /web/
