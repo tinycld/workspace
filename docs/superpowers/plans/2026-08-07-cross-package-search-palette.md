@@ -2223,6 +2223,8 @@ git -C cards commit -m "feat(search): contribute a search adapter to the palette
 - Create: `tinycld/core/components/search-palette/SearchPalette.tsx`
 - Create: `tinycld/core/components/search-palette/useSearchResults.ts`
 - Create: `tinycld/core/lib/search/use-active-package-slug.ts`
+- Create: `tinycld/core/lib/use-debounced-value.ts` (extracted — see Step 1)
+- Modify: `tinycld/core/lib/use-api-search.ts` (import the extracted helper)
 - Modify: `tinycld/core/components/CoreShortcuts.tsx` (register `/`)
 - Modify: the app shell layout that already mounts `HelpSearchPalette`, to mount `SearchPalette` alongside it
 
@@ -2232,22 +2234,58 @@ git -C cards commit -m "feat(search): contribute a search adapter to the palette
 
 Mirror `HelpSearchPalette`'s `.web.tsx` / `.tsx` split exactly. These land under core's existing `./components/*` wildcard export — no `package.json` change.
 
-- [ ] **Step 1: Write the results hook**
+- [ ] **Step 1: Extract the debounce helper**
 
-Create `useSearchResults.ts`:
+`useApiSearch` fetches ONE endpoint, so the palette cannot use it for an
+N-package fan-out. But its 300ms debounce is still needed, and duplicating it
+would let the two drift. Move `useDebouncedValue` out of
+`tinycld/core/lib/use-api-search.ts` into `tinycld/core/lib/use-debounced-value.ts`
+verbatim, export it, and have `use-api-search.ts` import it. No behavior change.
 
 ```ts
-import { useApiSearch } from '@tinycld/core/lib/use-api-search'
+import { useEffect, useState } from 'react'
+
+// Debounce a value: only surface the latest after `delayMs` of quiet. Genuine
+// timer side-effect (not a server-data sync), so it stays in an effect.
+export function useDebouncedValue<T>(value: T, delayMs: number): T {
+    const [debounced, setDebounced] = useState(value)
+    useEffect(() => {
+        const timer = setTimeout(() => setDebounced(value), delayMs)
+        return () => clearTimeout(timer)
+    }, [value, delayMs])
+    return debounced
+}
+```
+
+Run `cd tinycld && pnpm exec vitest run tests/unit/` and confirm any existing
+`use-api-search` tests still pass before continuing.
+
+- [ ] **Step 2: Write the results hook**
+
+Create `useSearchResults.ts`. **Use `useQueries`, not a loop of `useApiSearch`
+calls** — the in-scope package list is dynamic, and calling a hook per package
+in a `for` loop violates the Rules of Hooks. `useQueries` takes a dynamic array
+and is the supported API for exactly this.
+
+```ts
+import { useQueries } from '@tanstack/react-query'
+import { pb } from '@tinycld/core/lib/pocketbase'
 import { buildSections, type SearchSection } from '@tinycld/core/lib/search/build-sections'
 import { loadSearchAdapter, searchPackages } from '@tinycld/core/lib/search/registry'
 import type { ParsedQuery, SearchAdapterModule, SearchRow } from '@tinycld/core/lib/search/types'
-import { useEffect, useState } from 'react'
+import { useDebouncedValue } from '@tinycld/core/lib/use-debounced-value'
+
+const MIN_QUERY_LENGTH = 2
+const DEBOUNCE_MS = 300
 
 /**
  * Fan out one search per in-scope package and merge the results.
  *
- * Each package fetches independently so a slow one cannot hold up the rest —
- * useApiSearch already debounces and aborts superseded requests.
+ * useQueries rather than a loop of single-query hooks: the in-scope list
+ * changes as the user adds and removes chips, and a hook called per iteration
+ * of a `for` loop breaks the Rules of Hooks. React Query also gives each
+ * package independent caching and abort-on-supersede for free, so a slow
+ * package cannot hold up the rest.
  */
 export function useSearchResults(parsed: ParsedQuery): {
     sections: SearchSection[]
@@ -2258,62 +2296,67 @@ export function useSearchResults(parsed: ParsedQuery): {
             ? searchPackages.filter(p => parsed.chips.includes(p.slug))
             : searchPackages
 
-    const [adapters, setAdapters] = useState<Record<string, SearchAdapterModule>>({})
+    const query = useDebouncedValue(parsed.include.join(' '), DEBOUNCE_MS)
+    const not = useDebouncedValue(parsed.exclude.join(' '), DEBOUNCE_MS)
+    const enabled = query.length >= MIN_QUERY_LENGTH
 
-    // Adapter modules are dynamic imports, so resolving them is a genuine
-    // async side-effect rather than derived state.
-    useEffect(() => {
-        let cancelled = false
-        Promise.all(
-            scoped.map(async p => [p.slug, await loadSearchAdapter(p.slug)] as const)
-        ).then(pairs => {
-            if (cancelled) return
-            const next: Record<string, SearchAdapterModule> = {}
-            for (const [slug, mod] of pairs) if (mod) next[slug] = mod
-            setAdapters(next)
-        })
-        return () => {
-            cancelled = true
-        }
-    }, [scoped.map(p => p.slug).join(',')])
+    // Adapter modules are dynamic imports. Running them through Query rather
+    // than an effect keeps the resolution cached and out of component state;
+    // loadSearchAdapter already memoizes, so this is belt-and-braces.
+    const adapterQueries = useQueries({
+        queries: scoped.map(pkg => ({
+            queryKey: ['search-adapter', pkg.slug],
+            queryFn: () => loadSearchAdapter(pkg.slug),
+            staleTime: Number.POSITIVE_INFINITY,
+        })),
+    })
 
-    const query = parsed.include.join(' ')
+    const searchQueries = useQueries({
+        queries: scoped.map(pkg => ({
+            queryKey: ['package-search', pkg.slug, query, not],
+            queryFn: ({ signal }: { signal: AbortSignal }) =>
+                pb.send(pkg.endpoint, {
+                    method: 'GET',
+                    query: not ? { q: query, not } : { q: query },
+                    signal,
+                }),
+            enabled,
+            // A search is point-in-time: don't retry a failure (the user is
+            // still typing) and don't refetch on window focus.
+            retry: false,
+            refetchOnWindowFocus: false,
+        })),
+    })
+
     const rowsBySlug: Record<string, SearchRow[]> = {}
     let isSearching = false
 
-    for (const pkg of searchPackages) {
-        const inScope = scoped.some(p => p.slug === pkg.slug)
-        // Hooks cannot be called conditionally, so every package's hook runs
-        // and out-of-scope ones are simply disabled by an empty query.
-        const { results, isSearching: pending } = useApiSearch<unknown>(inScope ? query : '', {
-            endpoint: pkg.endpoint,
-            buildQueryParams: (q: string) => {
-                const params: Record<string, string> = { q }
-                if (parsed.exclude.length > 0) params.not = parsed.exclude.join(' ')
-                return params
-            },
-            extractResults: (response: unknown) =>
-                (response as { items?: unknown[] }).items ?? [],
-        })
-        if (!inScope) continue
-        if (pending) isSearching = true
+    scoped.forEach((pkg, i) => {
+        if (searchQueries[i]?.isFetching) isSearching = true
 
-        const adapter = adapters[pkg.slug]
-        if (!adapter) continue
-        rowsBySlug[pkg.slug] = results
+        const adapter = adapterQueries[i]?.data as SearchAdapterModule | null | undefined
+        const data = searchQueries[i]?.data as { items?: unknown[] } | undefined
+        if (!adapter || !data?.items) return
+
+        // A package whose request failed simply contributes no rows — one
+        // backend erroring must not empty the whole palette.
+        rowsBySlug[pkg.slug] = data.items
             .map(hit => adapter.toRow(hit))
             .filter((r): r is Omit<SearchRow, 'slug'> => r !== null)
             .map(r => ({ ...r, slug: pkg.slug }))
-    }
+    })
 
     return {
+        // Ordering lives entirely here and is unaffected by fetch order:
+        // compareRows tie-breaks on nav.order precisely so a late-arriving
+        // package cannot change the ranking of what already landed.
         sections: buildSections(rowsBySlug, searchPackages, parsed.chips, parsed.include),
         isSearching,
     }
 }
 ```
 
-- [ ] **Step 2: Write the shell**
+- [ ] **Step 3: Write the shell**
 
 Create `SearchPalette.web.tsx` following `HelpSearchPalette.web.tsx`'s structure: a module-level `<style>` injection with the id `tinycld-search-palette-styles` (distinct from help's, so the two cannot collide), `createPortal` to `document.body`, a capture-phase `keydown` listener, and click-outside dismiss.
 
@@ -2399,18 +2442,74 @@ function Hints({ items }: { items: string[] }) {
 
 Selection dispatch — every in-scope adapter's hook is called at the top level, then indexed:
 
+`useSearchActions` is a genuine per-package hook and cannot go through Query.
+Give each package a fixed child component so its hook sits at a component's top
+level — iterating `searchPackages` (module-constant, never reordered at runtime)
+rather than the filtered in-scope list keeps the number and order of hook calls
+identical on every render:
+
 ```tsx
-// Hooks cannot be called conditionally at selection time, so build the whole
-// map up front and index it on Enter.
-const actionsBySlug: Record<string, { onSelect: (row: SearchRow) => void }> = {}
-for (const pkg of searchPackages) {
-    const adapter = adapters[pkg.slug]
-    actionsBySlug[pkg.slug] = adapter?.useSearchActions() ?? { onSelect: () => {} }
+type SelectHandler = (row: SearchRow) => void
+
+/**
+ * Registers one package's selection handler. A component per package rather
+ * than a loop of hook calls inside the palette: `useSearchActions` is a hook,
+ * and calling it in a loop would break the Rules of Hooks the moment the
+ * package list changed. Renders nothing.
+ */
+function PackageActions({
+    slug,
+    onReady,
+}: {
+    slug: string
+    onReady: (slug: string, handler: SelectHandler) => void
+}) {
+    const adapter = useAdapterModule(slug)
+    const actions = adapter?.useSearchActions()
+    // Registering during render would mutate a parent ref mid-render; a ref
+    // write in an effect is the standard imperative-handle pattern.
+    useEffect(() => {
+        if (actions) onReady(slug, actions.onSelect)
+    }, [slug, actions, onReady])
+    return null
 }
+```
+
+The palette holds the handlers in a ref (not state — a handler landing must not
+trigger a re-render) and indexes it on Enter:
+
+```tsx
+const handlersRef = useRef<Record<string, SelectHandler>>({})
+const registerHandler = useCallback((slug: string, handler: SelectHandler) => {
+    handlersRef.current[slug] = handler
+}, [])
 
 function selectRow(row: SearchRow) {
-    actionsBySlug[row.slug]?.onSelect(row)
+    handlersRef.current[row.slug]?.(row)
     close()
+}
+```
+
+and renders one `PackageActions` per installed package inside the palette:
+
+```tsx
+{searchPackages.map(pkg => (
+    <PackageActions key={pkg.slug} slug={pkg.slug} onReady={registerHandler} />
+))}
+```
+
+`useAdapterModule(slug)` is a one-line `useQuery` wrapper over
+`loadSearchAdapter`, sharing the `['search-adapter', slug]` key with
+`useSearchResults` so the module resolves once:
+
+```tsx
+function useAdapterModule(slug: string): SearchAdapterModule | null {
+    const { data } = useQuery({
+        queryKey: ['search-adapter', slug],
+        queryFn: () => loadSearchAdapter(slug),
+        staleTime: Number.POSITIVE_INFINITY,
+    })
+    return (data as SearchAdapterModule | null) ?? null
 }
 ```
 
@@ -2426,7 +2525,7 @@ export function SearchPalette() {
 }
 ```
 
-- [ ] **Step 3: Register the shortcut**
+- [ ] **Step 4: Register the shortcut**
 
 There is no existing "which package am I in" helper, so add one first. Create
 `tinycld/core/lib/search/use-active-package-slug.ts`:
@@ -2478,23 +2577,25 @@ add `activeSlug` to the `useMemo` dependency array, and add to the shortcuts lis
 Import `useSearchPaletteStore` from `@tinycld/core/lib/search/search-palette-store`
 and `useActivePackageSlug` from `@tinycld/core/lib/search/use-active-package-slug`.
 
-- [ ] **Step 4: Mount the palette**
+- [ ] **Step 5: Mount the palette**
 
 Find where `HelpSearchPalette` is mounted in the app shell and mount `SearchPalette` beside it.
 
 Run: `cd tinycld && grep -rn "HelpSearchPalette" app/ core/components/ --include='*.tsx' | grep -v 'help/'`
 
-- [ ] **Step 5: Verify**
+- [ ] **Step 6: Verify**
 
 Run: `cd tinycld && pnpm exec tinycld-pkg check`
 Expected: PASS.
 
 Manually: start the app, press `/`, confirm the palette opens seeded with the current package, typing returns results, `Escape` closes.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git -C tinycld add core/components/search-palette/ core/components/CoreShortcuts.tsx app/
+git -C tinycld add core/components/search-palette/ core/components/CoreShortcuts.tsx \
+                  core/lib/search/use-active-package-slug.ts \
+                  core/lib/use-debounced-value.ts core/lib/use-api-search.ts app/
 git -C tinycld commit -m "feat(search): add the cross-package search palette"
 ```
 
