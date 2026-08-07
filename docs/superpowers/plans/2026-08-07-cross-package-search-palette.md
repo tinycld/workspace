@@ -888,6 +888,9 @@ git commit -m "feat(search): add the palette store"
 - Modify: `tinycld/core/lib/packages/types.ts` (add `search` to `PackageManifest`)
 - Modify: `tinycld/core/lib/packages/config-types.ts` (add `search` to `PackageEntry`)
 - Modify: `tinycld/scripts/load-manifest.ts` (carry `search` through)
+- Modify: `tinycld/scripts/describe-packages.ts` (carry `search` into `ConfigPkg` —
+  `generate.ts:556` routes every package through `manifestToConfigPkg`, so without
+  this the field is silently dropped before the generator ever sees it)
 - Modify: `tinycld/scripts/gen-config.ts` (validate + emit)
 - Create: `tinycld/core/lib/search/registry.ts`
 - Test: `tinycld/core/tests/unit/search-registry.test.ts`
