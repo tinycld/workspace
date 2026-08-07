@@ -36,7 +36,7 @@ Three layers, each independently testable:
   │  core/components/search-palette/                        │
   │  SearchPalette.web.tsx                                  │
   │    · overlay, chips, input, grouped list, footer        │
-  │    · owns selectedIndex, keyboard nav, focus, dismiss   │
+  │    · owns selected row id, keyboard nav, focus, dismiss │
   │    · knows NOTHING about any package's data             │
   └───────────────────────┬─────────────────────────────────┘
                           │ reads
@@ -174,6 +174,66 @@ costs no teaching.
 | `:` for an already-present chip | no-op; the word is consumed |
 | `/` pressed from inside Mail | opens `{ chips: ['mail'], text: '' }` |
 
+### Search terms: what the text means
+
+Everything that is not a chip is search text. Its semantics:
+
+**Implicit AND over prefix terms.** `budget q3` requires both terms; each matches as a prefix
+(`bud` matches "budget"). This is what all four backends already do — `core/fts/sanitize.go:40-46`
+quotes each term and appends `*`, joined by spaces, which is FTS5's implicit AND. The palette does
+not change it; the spec states it because it was previously unstated behavior.
+
+**Negation with `-term`.** Supported. `budget -draft` requires "budget" and excludes "draft".
+
+Negation binds **only at a term boundary**: a `-` that is preceded by whitespace (or is the first
+character) and followed by a non-space character. Mid-token hyphens are literal. This rule is not
+cosmetic — `-` is in the strip regex today precisely because of hyphenated filenames and email
+addresses:
+
+| Input | Parse |
+|---|---|
+| `budget -draft` | require `budget`, exclude `draft` |
+| `budget-2026.xlsx` | one literal term; the hyphen is mid-token |
+| `-draft` | exclude-only; see below |
+| `budget - draft` | trailing `-` with no attached term is dropped |
+
+**An exclude-only query returns nothing.** `-draft` alone has no positive term, so there is no
+result set to subtract from. The palette shows "Add a word to search for" rather than running a
+query that FTS5 would reject.
+
+**No other operators.** `&&`, `||`, `!`, `AND`, `OR`, `NOT`, quotes and parentheses are **not**
+supported and are stripped from the text before it reaches any backend. `parseQuery` strips them
+client-side so the user watches the character disappear as they type, rather than silently getting
+results that do not match what they typed.
+
+This last point fixes real current misbehavior, not merely a missing feature. Today `-urgent`
+reaches `SanitizeQuery`, which strips the `-` and searches for `urgent` — the **opposite** of the
+user's intent. And `a && b` leaves `&&` inside a quoted term (`"&&"*`), which matches no token and
+silently kills the entire query via the implicit AND. Both are silent wrong answers.
+
+Boolean operators are also a poor fit for search-as-you-type: `foo &&` is a syntactically
+incomplete expression that every intermediate keystroke must handle, and passing it through to
+FTS5 turns a parse error into a user-facing failure on the way to a valid query.
+
+### Server support for negation
+
+Negation is a **client-parsed, server-executed** feature. `parseQuery` splits text into
+`{ include: string[], exclude: string[] }` and passes them as separate query params, so no backend
+ever parses operator syntax and the injection surface `sanitize.go` exists to close stays closed.
+
+- **`core/fts`** — `SanitizeQuery` gains a companion that emits FTS5 `NOT` for excluded terms:
+  `"budget"* NOT "draft"*`. Contacts, drive and cards get this for free.
+- **`mail`** — needs the same treatment applied to **both arms of its UNION**
+  (`buildThreadFTSQuery` and `buildMessageFTSQuery`, `mail/server/search.go:58-79`). A negation
+  applied to only one arm produces nonsense: the excluded rows return via the other arm. This is
+  the single largest risk in the negation work and needs its own test.
+- **`drive`** — `drive/server/search.go:17` has its own near-copy of `sanitizeFTSQuery`. It needs
+  the same change, which is a second instance of the drift the "migrate drive onto `core/fts`"
+  cleanup would prevent. Noted as further motivation for that follow-up.
+
+Excluded terms apply to the same columns the positive terms search — no per-column negation
+(`-from:ada`), which would require the structured-filter machinery only mail has.
+
 **Opening state pre-seeds the current package.** One Backspace clears it to everywhere. This makes
 the common case ("find a thing in what I'm looking at") free, at the cost of a chip the user did
 not type — an accepted tension with the otherwise-explicit `:` rule.
@@ -193,28 +253,96 @@ RESTING — opened from Mail, one chip
 │  ↑↓ move   ↵ open   ⌫ remove mail   esc close          │
 ╰────────────────────────────────────────────────────────╯
 
-NO CHIPS — grouped by package, headers use each package's rail icon
+NO CHIPS — flat, best match first, each row badged with its package
 ╭────────────────────────────────────────────────────────╮
-│  ⌕  budget                                             │
+│  ⌕  budget-2026                                        │
+├────────────────────────────────────────────────────────┤
+│  ⛁  budget-2026.xlsx                            3d     │  ← tier 4
+│     Finance / Planning                                 │
+│  ▤  Finish budget review              Q3 Planning      │  ← tier 3
+│  ✉  Q3 budget approval                Grace · 1d       │  ← tier 1
+│     Grace Hopper · Inbox                               │
+╰────────────────────────────────────────────────────────╯
+   Drive outranks Mail despite nav.order 12 > 5 — the exact
+   title-prefix match wins. Grouping would have buried it.
+
+TWO CHIPS — grouped; the user has already narrowed the field
+╭────────────────────────────────────────────────────────╮
+│  ⌕  ⟨✉ mail⟩ ⟨⛁ drive⟩ budget                          │
 ├────────────────────────────────────────────────────────┤
 │  ✉ MAIL                                                │
 │    Q3 budget approval               Grace · 1d         │
 │  ⛁ DRIVE                                               │
 │    budget-2026.xlsx                 3d                 │
-│  ▤ CARDS                                               │
-│    Finish budget review             Q3 Planning        │
 ├────────────────────────────────────────────────────────┤
-│  ↑↓ move   ↵ open   esc close                          │
+│  ↑↓ move   ↵ open   ⌫ remove drive   esc close         │
 ╰────────────────────────────────────────────────────────╯
 ```
 
-**Grouping rule:** zero chips or 2+ chips → grouped, each group headed by that package's own
-Lucide `nav.icon` and label. Exactly one chip → flat list, no header (the chip already states the
-scope). Group order follows `nav.order` so it matches the package rail top-to-bottom. Arrow keys
-traverse the flattened list across group boundaries — groups are visual, not navigational.
+**Grouping rule:**
 
-Chips carry the same `nav.icon` as the group header and the destination, so one glyph identifies a
-package everywhere it appears.
+| Scope | Rendering | Order |
+|---|---|---|
+| zero chips (everywhere) | **flat**, each row badged with its package icon | match quality, best first |
+| exactly one chip | flat, no badges or header (the chip states the scope) | that package's own rank |
+| 2+ chips | grouped, each group headed by `nav.icon` + label | groups by `nav.order`; rows by rank within |
+
+Zero chips is the "I don't know where it is" case, so the best answer must be able to reach the
+top — grouping would structurally prevent that by pinning a perfect Drive match below every Mail
+hit. Explicit multi-chip is "I know it's one of these two", where scan-by-package is the more
+useful affordance and the user has already narrowed the field.
+
+Arrow keys traverse the flattened list across group boundaries — groups are visual, not
+navigational. Chips carry the same `nav.icon` as the group header and the destination, so one
+glyph identifies a package everywhere it appears.
+
+### Cross-package scoring
+
+Ordering a flat multi-package list requires comparing hits from different backends. **BM25 ranks
+cannot do this.** FTS5's BM25 weights each term by inverse document frequency computed over *that
+table's* corpus: if "budget" appears in 3 of 50,000 mail messages it scores as a rare, valuable
+term, while the same word in 40 of 200 drive files scores as common. The two numbers are
+meaningful only relative to their own index. A drive file that is a perfect filename match can
+therefore score below a marginal mail hit.
+
+The palette instead scores **match quality against the row's own visible text** — a pure function
+of `(query, row)` requiring no backend change and producing identical units for every package by
+construction. This is what command palettes generally rank on, and it suits the situation: the
+backend has already done recall (~25 pre-filtered rows per package), so the client's job is
+precision over text it can see.
+
+`scoreRow(query, row) → number`, in `core/lib/search/score.ts`:
+
+| Tier | Condition (case- and punctuation-insensitive) | Base |
+|---|---|---|
+| 5 | `title` equals the query | 1000 |
+| 4 | `title` starts with the query | 800 |
+| 3 | every query term prefix-matches a word in `title` | 600 |
+| 2 | `title` contains the query as a substring | 400 |
+| 1 | terms matched only in `subtitle`/`meta` | 200 |
+| 0 | no visible match — the backend matched body/content | 100 |
+
+**Tier 0 is load-bearing.** Mail matches message bodies and drive matches file content, so a
+genuinely excellent hit may contain none of the query terms in its visible row. Scoring these
+lowest keeps them present but below anything with a visible match, rather than discarding results
+the backend was right to return.
+
+Tie-breakers within a tier, in order:
+
+1. **Shorter `title` wins.** A 12-character title containing the query is a tighter match than a
+   90-character one containing the same words. Unit-free, so it compares across packages.
+2. **The package's own rank position** (the hit's index in that package's response), preserving
+   each backend's relevance judgement inside a tier — this is where BM25 still does useful work,
+   in the one place its scores are validly comparable.
+3. **`nav.order`**, so ordering is deterministic and stable rather than dependent on which
+   response arrived first.
+
+Deterministic ordering matters more than it looks: results stream in per package, and a
+non-deterministic sort would let rows reshuffle under the user's selection cursor as a slower
+package resolves.
+
+**Excluded terms do not participate in scoring** — they have already removed rows server-side, so
+counting them again would double-penalize.
 
 ### Footer
 
@@ -278,7 +406,12 @@ Each in-scope package queries independently through core's existing `useApiSearc
 debounces 300ms and lets React Query abort superseded requests via the queryFn `signal`. No new
 fetch machinery.
 
-- Groups render **as they arrive** rather than waiting on the slowest package.
+- Results render **as they arrive** rather than waiting on the slowest package. In the flat
+  (unscoped) case this means the list **re-sorts** when a later package resolves, since a
+  high-scoring hit must be able to take the top slot. To keep that from moving the selection out
+  from under the user, the palette tracks the selected **row id** rather than its index, so the
+  cursor follows its row through a re-sort. The selection only resets when the query itself
+  changes.
 - A package still in flight renders nothing — not a spinner row, which would make the list jump
   under the user's selection cursor.
 - One package erroring drops its group and leaves the rest. `core/fts` routes already return
@@ -303,8 +436,10 @@ contract violation.
 
 ### Pure, testable units (no React)
 
-- `parseQuery(input, installedSlugs)` → `{ chips, text }` — the `:` grammar
-- `buildSections(resultsBySlug, packages)` → ordered sections
+- `parseQuery(input, installedSlugs)` → `{ chips, include, exclude }` — the `:` grammar, the
+  `-term` boundary rule, and operator stripping
+- `scoreRow(query, row)` → number — the tier + tie-break scoring
+- `buildSections(resultsBySlug, packages, mode)` → flat rows or ordered sections
 - each package's `toRow` — hit shape → row
 
 ---
@@ -431,7 +566,8 @@ projects, and each package's existing route is already owner- or membership-scop
 - `core/lib/packages/types.ts` — add the `search` manifest field
 - `core/lib/search/types.ts` — `SearchRow`, `SearchAdapterModule`
 - `core/lib/search/registry.ts` — derive `packageSearchAdapters` from `tinycldConfig`
-- `core/lib/search/parse-query.ts` — `parseQuery` (the `:` grammar)
+- `core/lib/search/parse-query.ts` — `parseQuery` (the `:` grammar, `-term`, operator stripping)
+- `core/lib/search/score.ts` — `scoreRow`
 - `core/lib/search/build-sections.ts` — `buildSections`
 - `core/lib/search/search-palette-store.ts` — Zustand: `isOpen`, `chips`, `text` (not persisted)
 - `core/components/search-palette/SearchPalette.web.tsx` — the shell
@@ -442,14 +578,19 @@ projects, and each package's existing route is already owner- or membership-scop
 - `scripts/load-manifest.ts` — validate `search.adapter` via `assertSafeImportField`
 - `core/server/fts/config.go` — `Scope` interface, `MemberScope`, `ExcludeField`
 - `core/server/fts/search.go` — scope via interface, disabled check, exclude clause
-- `core/server/fts/search_test.go` — `Scope:` rename, member/disabled/exclude cases
+- `core/server/fts/sanitize.go` — emit FTS5 `NOT` for excluded terms
+- `core/server/fts/register.go` — accept the `not` query param
+- `core/server/fts/search_test.go`, `sanitize_test.go` — `Scope:` rename, member/disabled/exclude
+  cases, negation cases
 
 **Contacts** — `server/register.go` (`Owner:` → `Scope:`), `manifest.ts`, `package.json` exports,
 `tinycld/contacts/search-adapter.ts`
 
-**Drive** — `manifest.ts`, `package.json` exports, `tinycld/drive/search-adapter.ts`
+**Drive** — `manifest.ts`, `package.json` exports, `tinycld/drive/search-adapter.ts`,
+`server/search.go` (negation in its own `sanitizeFTSQuery` copy)
 
-**Mail** — `manifest.ts`, `package.json` exports, `tinycld/mail/search-adapter.ts`
+**Mail** — `manifest.ts`, `package.json` exports, `tinycld/mail/search-adapter.ts`,
+`server/search.go` (negation in **both** UNION arms), `server/endpoints_search.go` (`not` param)
 
 **Cards — new**
 - `pb-migrations/1980000002_create_fts_cards.js`
@@ -469,12 +610,21 @@ rather than in one member)
 ## Verification
 
 **Unit (vitest, core):**
-- `parse-query.test.ts` — `mail:` becomes a chip; `budget:` stays literal text; `mail` without a
-  colon stays text (**the regression test for the "mail server migration" case**); Backspace on
-  empty text pops the trailing chip; a duplicate chip is a no-op that still consumes the word;
-  label and slug both match.
-- `build-sections.test.ts` — sections order by `nav.order`; a package with zero hits contributes
-  no section; one chip yields a flat list; two chips yield grouped output.
+- `parse-query.test.ts` — chips: `mail:` becomes a chip; `budget:` stays literal text; `mail`
+  without a colon stays text (**the regression test for the "mail server migration" case**);
+  Backspace on empty text pops the trailing chip; a duplicate chip is a no-op that still consumes
+  the word; label and slug both match. Negation: `budget -draft` splits into include/exclude;
+  `budget-2026.xlsx` stays **one literal term** (the mid-token hyphen case); a leading `-` with no
+  attached term is dropped; `-draft` alone yields an empty include set. Operators: `&&`, `||`,
+  `!`, `AND`, `OR`, `NOT`, quotes and parens are stripped from the text.
+- `score.test.ts` — an exact title match outranks a prefix, a prefix outranks a substring, and a
+  subtitle-only match outranks a body-only (tier 0) hit; **a tier-5 hit from a low-`nav.order`
+  package outranks a tier-1 hit from a high-`nav.order` one** (the case that motivated scoring);
+  shorter title wins within a tier; equal titles fall through to package rank then `nav.order`;
+  the function is deterministic for a fixed input set regardless of insertion order.
+- `build-sections.test.ts` — zero chips yields a flat score-ordered list with package badges; one
+  chip yields a flat list with no badges; 2+ chips yields groups ordered by `nav.order`; a package
+  with zero hits contributes no section.
 
 **Unit (vitest, per package):** each `search-adapter.test.ts` asserts `toRow` maps that package's
 real response shape to a `SearchRow`. Cards additionally: a hit whose project is not synced is
@@ -487,6 +637,13 @@ project's cards; a non-member gets zero; a **removed** member gets zero (proves 
 live subquery, not a cached grant); a `disabled` member gets zero; an archived card is excluded; a
 member of two projects gets correct `project` values on each hit. Also update `core/server/fts`
 tests for the `Scope` rename.
+
+**Go (negation):** `core/server/fts/sanitize_test.go` — an excluded term emits FTS5 `NOT`; an
+empty exclude list emits the query unchanged; an exclude-only query returns `""` rather than
+malformed SQL. In `mail/server`, a test that **a term excluded from a thread-arm match is not
+resurrected by the message arm** — a negation applied to only one side of the UNION silently
+returns the rows the user asked to exclude, which is the single most likely way this feature ships
+broken.
 
 **E2E (playwright, driving the UI — no `page.goto` for in-app navigation, no raw PB writes; use
 `tinycld/tests/e2e/helpers.ts` + `login`/`navigateToPackage`):**
@@ -501,6 +658,15 @@ tests for the `Scope` rename.
   card (the `router.replace` ordering case).
 - Escape closes without navigating.
 - `/` typed inside a card title editor does **not** open the palette.
+- With no chips, a seeded item whose **title exactly matches** the query appears first, above a
+  package that would sort earlier by `nav.order` — the end-to-end proof that scoring beats
+  rail order.
+- `budget -draft` returns an item titled "budget" and excludes one titled "budget draft".
+- A hyphenated query (`budget-2026`) still finds the hyphenated item — negation did not eat the
+  hyphen.
+- **The selection survives a re-sort:** with results arriving from several packages, select a row,
+  then assert the same row is still selected once the slowest package resolves and reorders the
+  list.
 
 Wait on the `/api/*/search` response or poll — **never** a fixed `waitForTimeout`, since
 `useApiSearch` debounces 300ms and a bare timeout will flake under CI load. Leave a comment saying
@@ -511,9 +677,10 @@ so.
 lint` at the root; `pnpm run packages:generate` from `tinycld/` after manifest changes.
 
 **Help:** new `tinycld/core/help/search.md` (frontmatter `title`/`summary`, tags `[search,
-keyboard, packages]`) covering `/`, the `:` grammar, multiple chips, and Backspace-to-widen. Mac
-glyphs only (⌘ ⇧ ⌥) — the renderer substitutes per platform. Cross-link from each package's
-existing help topic where one exists.
+keyboard, packages]`) covering `/`, the `:` grammar, multiple chips, Backspace-to-widen, `-term`
+exclusion, and an explicit statement that `AND`/`OR`/quotes are not supported (so their absence
+reads as a decision rather than a bug). Mac glyphs only (⌘ ⇧ ⌥) — the renderer substitutes per
+platform. Cross-link from each package's existing help topic where one exists.
 
 ---
 
@@ -529,7 +696,34 @@ force three simple callers to carry mail's complexity — including reintroducin
 surface core deliberately refuses. The adapter seam gets the same palette behavior for ~20 lines.
 
 **A declarative `href` in the adapter.** Cannot express cards' ordered store mutations or drive's
-preview overlay. See "The adapter contract".
+folder-navigation-plus-selection. See "The adapter contract".
+
+**Cross-package ordering by BM25.** Rejected because FTS5's BM25 weights terms by inverse document
+frequency over *each table's own* corpus, so scores from different tables are denominated in
+different units — a package with a small, topic-dense corpus systematically scores lower on its
+own subject matter. Three routes to genuine comparability were considered:
+
+1. *Normalize per table* (divide by that table's top score). Cheap, but it is a rank transform,
+   not a relevance one: it forces every package's best hit to 1.0, including a package whose best
+   hit is poor. That is the exact failure the scoring is meant to prevent, merely relocated.
+2. *Recompute IDF globally* — a corpus-wide term-frequency table synced on every write across all
+   packages, with rescoring outside FTS5 (`bm25()` accepts no injected statistics). Mathematically
+   correct and a substantial subsystem. It also breaks the lean-shell guarantee: global IDF varies
+   with which packages are installed, so the same query ranks differently per workspace.
+3. *One shared FTS table for all packages.* Genuinely comparable, but collapses per-package
+   schemas (mail indexes `body_text`, cards `description`, drive `content`), forces a single
+   tokenizer, and makes the seam `core/fts` adoption after all — which mail cannot do.
+
+Options 2 and 3 are each larger than the rest of this feature. More fundamentally, BM25 answers
+the wrong question here: it ranks a large corpus by term rarity when the documents cannot be
+inspected, whereas the palette holds ~25 already-relevant rows per package with their text in
+hand. BM25 is retained where its scores *are* comparable — within a package, as the recall
+mechanism and an intra-tier tie-breaker.
+
+**Full boolean operators (`AND`/`OR`/parentheses).** Rejected. Every intermediate keystroke of an
+incomplete expression (`foo AND `) must do something sensible under search-as-you-type, passing
+raw syntax to FTS5 turns parse errors into user-facing failures, and it re-opens the injection
+surface `sanitize.go` exists to close. `-term` covers the common case at a fraction of the cost.
 
 **A permanent filter-chip row under the input.** The conventional answer, rejected for three
 reasons: it costs a permanent UI row in a surface whose whole premise is keyboard speed; it wraps
@@ -557,16 +751,26 @@ across sessions — a user could not know what `/` will do before pressing it.
    calls it today, but coordinate merge order if anything else is mid-flight on `core/fts`.
 3. **Fan-out cost** with zero chips scales linearly with packages declaring `search`. Fine at four;
    revisit past roughly eight.
-4. **Backfill on a large `cards_cards`** — the `INSERT ... SELECT` runs synchronously during
+4. **Scoring depends on adapter row quality.** `scoreRow` reads `title`/`subtitle`/`meta`, so an
+   adapter that puts weak text in `title` ranks its package badly through no fault of the
+   backend. Each adapter should map the field a user would recognize as the item's name into
+   `title` — file name, subject, card title, contact name — and this belongs in the adapter
+   contract's documentation.
+5. **Tier 0 sizing.** Mail and drive match bodies and file content, so under a broad query a large
+   share of hits may be tier 0 and sort below everything visible. If that reads as "mail results
+   are always last", the fix is per-package result caps before scoring, not a tier reshuffle.
+6. **Negation across mail's UNION** is the most likely way this ships subtly broken — see the
+   named test under Verification.
+7. **Backfill on a large `cards_cards`** — the `INSERT ... SELECT` runs synchronously during
    migration. Fine at kanban scale, no batching proposed; watch deploy timing.
-5. **`/` ownership.** Core claims `/` globally. If a package later wants `/` for an in-context
+8. **`/` ownership.** Core claims `/` globally. If a package later wants `/` for an in-context
    search of its own, it must use a different key or opt into the palette. Worth stating in the
    help topic so the convention is explicit.
-6. **Core version bump.** Cards declares `peerVersions: { '@tinycld/core': '>=0.0.4 <0.1.0' }`.
+9. **Core version bump.** Cards declares `peerVersions: { '@tinycld/core': '>=0.0.4 <0.1.0' }`.
    New core files land under existing wildcard exports and the Go change goes through `go.work`'s
    local replace, so no manifest edit should be needed as long as core stays in `0.0.x`. The
    manifest `search` field is additive and optional, so older packages remain valid. Confirm
    against the release process before assuming it is skippable.
-7. **Existing per-package search UI** (mail's `SearchBar`, drive's search field, contacts' search)
+10. **Existing per-package search UI** (mail's `SearchBar`, drive's search field, contacts' search)
    is untouched by this batch and coexists with the palette. Whether the palette should eventually
    replace any of them is deliberately left open.
