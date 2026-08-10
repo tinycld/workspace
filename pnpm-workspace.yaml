@@ -29,6 +29,8 @@ packages:
   - calendar
   - cards
   - google-takeout-import
+  - search-alpha
+  - search-beta
 
 # Per-package build-script approvals. pnpm blocks dependency install/postinstall
 # scripts by default; these are trusted and needed: esbuild (its native binary,
