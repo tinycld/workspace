@@ -24,6 +24,12 @@
 - Field **resolution** (column key → `FieldType`, relation target, select options) is deliberately absent from this phase. The client-generated `pbZodSchema.ts` lacks relation targets, so resolution belongs to Go, which has full collection metadata: the Phase 2 engine resolves at boot, and the `export-types` binary (which replays all migrations) is the natural place to also emit a resolved client catalog. Phase 1 catalogs carry raw declarations only.
 - `core:notify` and all native-action *execution* is Phase 2 (`automation.RegisterAction` registry in Go).
 
+Added during Phase 1 execution:
+
+- **Dynamic (DB-installed) package catalogs:** `packageAutomation` is static-only (derive-components precedent). `usePackages()[].automation` carries the RAW `{ definitions }` manifest pointer, not resolved defs. Delivering catalogs for DB-installed packages needs resolved defs embedded in `manifest_json` at install time plus a hook-level catalog (e.g. `useAutomationCatalog`) merging static + dynamic.
+- **`rule_runs` relation dot-traversal:** its list/view rules (`rule.owner = ...`) are the codebase's first use of relation traversal in an access rule; semantics are unverified until the engine writes runs. Phase 2 must smoke-test that a run is visible to the rule owner and invisible to an unrelated user.
+- **Security rulings recorded in the spec:** `rules.updateRule` is body-locked (`@request.body.*:isset`); guests can't read org rules or create rules; org-rule runs are admin/owner-visible only.
+
 ---
 
 ### Task 1: Automation authoring types + helpers
