@@ -591,3 +591,11 @@ Small items the earlier final reviews deferred to "the UI phase", now due:
 - Help topics exist for `core:rules` and `mail:rules` and render in the help hub.
 
 **Follow-ups deliberately out of scope** (tracked in phase-2 handoff): resolver-aware dry-run scoping; dynamic (DB-installed) package catalogs (`useAutomationCatalog` serves them automatically once install-time defs reach the engine — a future re-sync updates the `automation_catalog` rows and every open client reacts live, which is exactly why the catalog is a collection); mail's dead `direction` guard; native date-picker for date conditions.
+
+## Phase 4 candidates (added after execution)
+
+- **PRODUCT GAP (verified): `core:apply-label` on mail messages is invisible in mail's UI.** The action writes `label_assignments{collection: 'mail_messages', record_id: <message>}`; every mail label reader filters on `collection = 'mail_thread_state'`. Options: a thread-targeting label primitive in the engine (context resolution through a declared message→thread relation), or mail also reading message-scoped assignments. The mail help carries an honest caveat until then; the e2e flagship uses `core:notify`.
+- Resolver-aware dry-run scoping (endpoints.go comment; DryRunPanel renders the degradation honestly meanwhile).
+- `syncCatalog` equality check before re-save (per-boot realtime churn).
+- `mail-compose-attachments.spec.ts:54` flakes under full parallel load — pre-existing, needs its own debugging session; must not be absorbed silently by merges.
+- Mail's dead `direction` guard in `bufferMailNotification` (pre-existing; notifications currently fire on outbound/draft creates).

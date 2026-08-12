@@ -198,7 +198,7 @@ Shared building blocks in `tinycld/core/`:
 Mount points:
 
 1. **Settings → Rules** (personal). Requires a non-admin-gated settings surface — today's per-package settings route is admin-only, so personal rules mount in the user-level settings area.
-2. **Admin → Org rules** — same `RulesPanel` with `scope="org"`, via the existing `systemSettings` mechanism.
+2. **Org rules** — same `RulesPanel` with `scope="org"`. (As built in Phase 3: an "Organization" segment on the same Settings → Rules screen, admin-editable and member-readable — NOT the `systemSettings` mechanism this spec originally named, which turned out to be the pre-auth deployment console, not org administration.)
 3. **Embedded package view** — core exports `RulesPanel`/`RuleBuilder`; a package mounts them on its own route (e.g. Mail sidebar "Rules") pre-filtered to its triggers, with "+ New rule" pre-scoped. Same records as the settings surfaces — no forked UI.
 
 Org rules appear read-only in personal lists. Everything works on web **and** native (vertical layouts, standard pickers, no drag-critical interactions).
