@@ -4,7 +4,7 @@
 
 **Goal:** Make workflow rules user-visible: a resolved-field catalog served by the engine, the RuleBuilder (stacked When/If/Then cards) and RulesPanel (list/toggle/reorder/history) in core, mounted in personal settings (with an org segment) and embedded in mail, with help topics and e2e coverage.
 
-**Architecture:** A new Go catalog endpoint resolves trigger/action fields against live collection metadata (types, relation targets + display fields, select options, native-action availability) — the client fetches it once via TanStack Query. UI components live in `core/components/rules/` and are imported by mail via the existing `./components/*` exports glob. The rule draft is managed by a purpose-built `useRuleDraft` hook (NOT react-hook-form — the nested conditions AST isn't a flat form and `useFieldArray` has zero codebase precedent; RHF stays for what it's good at elsewhere). Validation reuses Phase 1's zod schemas at save time. Spec: `docs/superpowers/specs/2026-08-11-workflow-rules-design.md`; handoff notes at the end of the phase 1+2 plan docs.
+**Architecture:** The engine materializes a resolved trigger/action catalog into a new read-only `automation_catalog` collection at boot (types, relation targets + display fields, select options, native-action availability) — the `pkg_registry` pattern: server-owned registry rows, client reads via `useOrgLiveQuery` like everything else. The rows are derived output, not source of truth: boot-time sync rebuilds them from the defs + collection schemas + handler registry (all boot-stable), reconciling by ref. UI components live in `core/components/rules/` and are imported by mail via the existing `./components/*` exports glob. The rule draft is managed by a purpose-built `useRuleDraft` hook (NOT react-hook-form — the nested conditions AST isn't a flat form and `useFieldArray` has zero codebase precedent; RHF stays for what it's good at elsewhere). Validation reuses Phase 1's zod schemas at save time. Spec: `docs/superpowers/specs/2026-08-11-workflow-rules-design.md`; handoff notes at the end of the phase 1+2 plan docs.
 
 **Tech Stack:** Go (catalog endpoint in `core/server/automation/`), React Native + Uniwind className styling, TanStack Query (`useQuery` via `pb.send`), pbtsdb (`useOrgLiveQuery`/`useMutation`), Zustand (builder open-state), Playwright.
 
@@ -22,7 +22,9 @@
 
 | File | Responsibility |
 |---|---|
-| `core/server/automation/catalog.go` (+test) | `GET /api/automation/catalog` — resolved triggers/actions |
+| `core/server/pb_migrations/2000000000_create_automation_catalog.js` | The read-only catalog collection |
+| `core/server/automation/catalog.go` (+test) | Boot-time catalog materialization into `automation_catalog` |
+| `core/lib/pocketbase.ts` (modify) | Register the `automation_catalog` client store |
 | `core/lib/automation/api.ts` | Hand-declared TS mirrors of catalog/dry-run/run payloads |
 | `core/lib/automation/use-automation-catalog.ts` | `useAutomationCatalog()` query hook |
 | `core/lib/automation/use-rule-mutations.ts` | CRUD + reorder + runNow + dryRun hooks |
@@ -48,15 +50,20 @@ Fidelity note for implementers: logic-bearing code (Go, hooks, draft, serializat
 
 ---
 
-### Task 1: Catalog endpoint (Go)
+### Task 1: Materialized catalog collection (Go + migration)
 
 **Files:**
+- Create: `tinycld/core/server/pb_migrations/2000000000_create_automation_catalog.js`
 - Create: `tinycld/core/server/automation/catalog.go`
-- Modify: `tinycld/core/server/automation/register.go` (call `registerCatalogEndpoint(app, engine)` next to `registerEndpoints`)
+- Modify: `tinycld/core/server/automation/register.go` (call `engine.syncCatalog()` after `engine.Start()` in the `OnServe` binding — handlers register in `RegisterExtras` before `OnServe`, so availability is accurate by then)
+- Modify: `tinycld/core/lib/pocketbase.ts` (register the client store + add to `coreStores`)
 - Test: `tinycld/core/server/automation/catalog_test.go`
 
 **Interfaces:**
-- Produces `GET /api/automation/catalog` (auth required), response:
+- **Migration** (unreleased phase — follow the `1990000000_create_rules.js` conventions; collection id `pbc_automation_catalog_01`): fields `ref` (text, required), `kind` (select: `trigger`/`action`, required), `pkg` (text), `label` (text), `definition` (json), `available` (bool), autodates; unique index on `ref`; access rules — read for authenticated non-guests (`@request.auth.id != "" && @request.auth.role != "guest"`, matching the rules-collection posture), `createRule`/`updateRule`/`deleteRule` all `null` (engine-only writes, the `rule_runs` pattern).
+- **Client store** (`pocketbase.ts`): `const automation_catalog = newCollection('automation_catalog', { omitOnInsert: ['created', 'updated'], ...indexing })`, added to `coreStores` — the `pkg_registry` shape.
+- **`catalog.go`** produces `(*Engine) buildCatalog(app core.App) catalogResponse` (pure derivation, unit-testable) and `(*Engine) syncCatalog()` (reconcile rows by `ref`: upsert changed/new, delete stale — the cron-reconcile shape; every write via superuser `app.Save`, marked-and-drained is NOT needed since no trigger can target this collection name... unless a package names a collection `automation_catalog`-adjacent — don't overthink: `defsHaveTrigger` gating from Phase 2 already handles sentinel hygiene generically if `markEngineWrite` were used; it isn't needed here at all because catalog rows are not rule-dispatchable in any defs). The row's `definition` json carries the resolved `catalogTrigger`/`catalogAction` struct (below) verbatim; `available` is duplicated as a real column so the UI can filter without parsing json.
+- Derivation structs (these become the `definition` payload AND the TS mirror in Task 2):
 
 ```go
 type catalogField struct {
@@ -231,13 +238,15 @@ func actionIndex(actions []catalogAction, ref string) int {
 }
 ```
 
+Additional test (append to the Step 1 file): `TestSyncCatalogReconciles` — apply the real migrations (`rlstest` idiom established in the package), run `syncCatalog()`, assert one row per trigger/action with `definition` json round-tripping the derived struct and `available` mirrored as a column; register the missing native handler, re-sync, assert the row's `available` flipped and NO duplicate row exists (unique ref); remove an action from the engine's defs (build a second Engine with fewer defs sharing the app), re-sync, assert the stale row was deleted.
+
 - [ ] **Step 2: Run to verify RED** — `cd /Users/nas/code/tinycld/tinycld/core/server && go test ./automation/ -run TestCatalog -v` → FAIL (undefined symbols).
 
-- [ ] **Step 3: Implement `catalog.go`** — `(*Engine) buildCatalog(app core.App) catalogResponse` + `registerCatalogEndpoint(app, engine)` binding `GET /api/automation/catalog` in `OnServe` with the package's `requireAuth`, returning `re.JSON(200, engine.buildCatalog(re.App))`. Resolution per the Interfaces block; reuse `exposedFields`-equivalent logic by resolving through the collection's `Fields` with the same skip rules (factor a shared `resolvableColumns(col) []core.Field` if it avoids duplication with `template.go` — keep the security filters single-sourced). Wire the call in `register.go`.
+- [ ] **Step 3: Implement** — the migration, `catalog.go` (`buildCatalog` + `syncCatalog` per the Interfaces block; resolution reuses the same security skip rules as `template.go`'s `exposedFields` — factor a shared `resolvableColumns(col)` if it keeps the filters single-sourced), the `register.go` sync call, and the `pocketbase.ts` store registration.
 
-- [ ] **Step 4: GREEN + full suite** — `go test ./automation/ -v` all pass; `gofmt -l automation/` empty; `go test ./...` green.
+- [ ] **Step 4: GREEN + full suite + regen** — `go test ./automation/ -v` all pass; `gofmt -l automation/` empty; `go test ./...` green; `cd /Users/nas/code/tinycld/tinycld && pnpm run packages:generate` (regenerates `pbSchema.ts` with the new `AutomationCatalog` interface) then `pnpm exec tinycld-pkg typecheck` clean.
 
-- [ ] **Step 5: Commit (tinycld)** — `git add core/server/automation/catalog.go core/server/automation/catalog_test.go core/server/automation/register.go && git commit -m "feat(automation): resolved trigger/action catalog endpoint"`
+- [ ] **Step 5: Commit (tinycld)** — `git add core/server/pb_migrations/2000000000_create_automation_catalog.js core/server/automation/catalog.go core/server/automation/catalog_test.go core/server/automation/register.go core/lib/pocketbase.ts && git commit -m "feat(automation): materialized catalog collection"`
 
 ---
 
@@ -252,22 +261,34 @@ func actionIndex(actions []catalogAction, ref string) int {
 
 **Interfaces:**
 - `api.ts`: hand-declared mirrors (the `useSearchResults.ts` precedent — comment `/** mirrors core/server/automation/catalog.go */`): `CatalogField`, `CatalogTrigger`, `CatalogParam`, `CatalogAction`, `CatalogResponse`, `DryRunRequest { trigger: string; conditions: ConditionsAst }`, `DryRunResponse { total: number; matches: { id: string; summary: Record<string, unknown> }[] }`, `RunResponse { queued: boolean }`. `ConditionsAst`/`RuleActionItem` TS types derive from Phase 1's zod schemas via `z.infer` re-export (`export type ConditionsAst = z.infer<typeof conditionsAstSchema>`).
-- `use-automation-catalog.ts`:
+- `use-automation-catalog.ts` — a live query over the materialized collection (house idiom; reacts to re-syncs automatically), assembling the `CatalogResponse` shape the rest of the UI consumes:
 
 ```ts
-import { useQuery } from '@tanstack/react-query'
-import { pb } from '@tinycld/core/lib/pocketbase'
-import type { CatalogResponse } from './api'
+import { useMemo } from 'react'
+import { useStore } from '@tinycld/core/lib/pocketbase'
+import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
+import type { CatalogAction, CatalogResponse, CatalogTrigger } from './api'
 
-export function useAutomationCatalog() {
-    const { data, isPending, error } = useQuery({
-        queryKey: ['automation-catalog'],
-        queryFn: ({ signal }) =>
-            pb.send('/api/automation/catalog', { method: 'GET', signal }) as Promise<CatalogResponse>,
-        staleTime: 5 * 60_000,
-        refetchOnWindowFocus: false,
-    })
-    return { catalog: data, isPending, error }
+export function useAutomationCatalog(): { catalog: CatalogResponse | undefined; isReady: boolean } {
+    const [catalogCollection] = useStore('automation_catalog')
+    const { data: rows, isReady } = useOrgLiveQuery(query =>
+        query.from({ automation_catalog: catalogCollection })
+    )
+    // definition is a json column: tolerate malformed rows (skip, don't throw) —
+    // the engine owns the writes, but a version-skewed client must not crash.
+    const catalog = useMemo(() => {
+        if (!rows) return undefined
+        const triggers: CatalogTrigger[] = []
+        const actions: CatalogAction[] = []
+        for (const row of rows) {
+            const def = row.definition as CatalogTrigger | CatalogAction | null
+            if (!def || typeof def !== 'object' || !('ref' in def)) continue
+            if (row.kind === 'trigger') triggers.push(def as CatalogTrigger)
+            if (row.kind === 'action') actions.push({ ...(def as CatalogAction), available: row.available })
+        }
+        return { triggers, actions }
+    }, [rows])
+    return { catalog, isReady }
 }
 ```
 
@@ -569,4 +590,4 @@ Small items the earlier final reviews deferred to "the UI phase", now due:
 - Mail's sidebar has Rules; its panel is the same records filtered to mail; the flagship deliver→label→history flow passes.
 - Help topics exist for `core:rules` and `mail:rules` and render in the help hub.
 
-**Follow-ups deliberately out of scope** (tracked in phase-2 handoff): resolver-aware dry-run scoping; dynamic (DB-installed) package catalogs (`useAutomationCatalog` serves them automatically once install-time defs exist server-side — the endpoint reads the engine's defs, which is the correct seam); mail's dead `direction` guard; native date-picker for date conditions.
+**Follow-ups deliberately out of scope** (tracked in phase-2 handoff): resolver-aware dry-run scoping; dynamic (DB-installed) package catalogs (`useAutomationCatalog` serves them automatically once install-time defs reach the engine — a future re-sync updates the `automation_catalog` rows and every open client reacts live, which is exactly why the catalog is a collection); mail's dead `direction` guard; native date-picker for date conditions.
