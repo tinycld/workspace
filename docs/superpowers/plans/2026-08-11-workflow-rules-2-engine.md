@@ -2911,3 +2911,12 @@ git commit -m "feat: resolve message owners for personal automation rules"
 - The member client is untouched (no TS changes in this phase); `pnpm exec tinycld-pkg check` still passes in `tinycld/`.
 
 **Next (Phase 3 — UI):** RulesPanel / RuleBuilder / RunHistory / dry-run preview, the three mount points, the resolved-field catalog for the builder (Go-resolved, served or generated), dynamic-package catalog handling (see Phase 1 handoff), help topics, e2e specs.
+
+## Phase 3 handoff notes (added after execution)
+
+- **Dry-run cannot scope owner-less triggers:** `ownerFilterFor` understands only direct user-FK columns, so for `mail:message-received` (resolver-based ownership) non-admins get an error instead of a preview. Resolver-aware dry-run scoping is a Phase 3 design item — build the UI around the real behavior (trigger filters ARE applied to candidates; drafts/outbound never count).
+- **Engine mechanisms added beyond the original plan:** `RegisterTriggerFilter(ref, fn)` (gates events for ALL rule scopes — mail uses it to keep `message-received` inbound-only via `delivery_status`); manual-run dispatch fetches by rule id and ignores `enabled` (locked decision — it is the test path).
+- **Evaluator contracts the builder must match:** conditions on non-exposed fields fail closed (build the condition picker strictly from exposed fields); date values accepted as PB datetime, bare date, or RFC3339; text ops are case-insensitive; `is_empty` treats numeric 0 as non-empty (don't offer is_empty for numbers).
+- **Native actions self-enforce access** (pkgaccess applies to record-ops only) — document this for any package adding native handlers; `core:notify` results always read `ok` (fire-and-forget).
+- **Mail follow-up ticket (pre-existing, out of scope here):** `bufferMailNotification`'s `direction` guard is dead code (field doesn't exist) — mail notifications currently fire on outbound/draft creates; fix alongside Phase 3 mail work.
+- **In-app help topics** (house rule) are owed when the feature becomes user-visible — Phase 3 scope, both the core `automation-rules` topic and mail's embedded-view topic.
