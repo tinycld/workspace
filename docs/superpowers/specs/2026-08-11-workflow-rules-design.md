@@ -35,7 +35,7 @@ app.Cron() (scheduled)          ├─→ trigger matcher → condition evaluato
 POST …/run (manual)            ─┘
 ```
 
-- Packages contribute **catalogs, not code** (except optional native-action Go handlers).
+- Packages contribute **catalogs, not code** (except optional native-action Go/TS handlers).
 - Core owns: the manifest contract, storage (`rules`, `rule_runs`), the Go engine, and all UI components.
 - The engine lives in **core Go**, so it runs in multi-org tenant mode (where no package Go is linked). Record-op actions and core-native actions work everywhere; package-native actions are single-tenant only.
 
@@ -133,7 +133,7 @@ Two new **core** collections (core migrations, append-only once released).
 | `order` | number | execution order among rules sharing a trigger |
 | `stop_processing` | bool | if matched, skip later rules |
 
-Access rules: personal rules readable/writable by `owner`; org rules readable by all authenticated users (so users can see why org automation touches their data) but writable by admins only. UI writes go through `useMutation`; reads through `useOrgLiveQuery`.
+Access rules (as implemented in Phase 1): personal rules readable/writable by `owner`, with the update rule **body-locked** so an owner cannot PATCH `scope` or `owner` (a personal rule could otherwise self-escalate to org scope, which the engine runs with system authority). Org rules are readable by all authenticated **non-guest** users (so members can see why org automation touches their data) but writable by admins/owners only; guests can neither read org rules nor create rules of any scope (matches the house guest-exclusion posture). UI writes go through `useMutation`; reads through `useOrgLiveQuery`.
 
 ### Condition AST (`conditions`)
 
@@ -166,7 +166,7 @@ One level of grouping, no recursion — mirrors the builder's "+ add condition /
 | `error` | text | top-level engine failure |
 | `duration_ms` | number | |
 
-Engine prunes to the most recent 200 runs per rule. `rule_runs` is read-only to whoever can read the rule.
+Engine prunes to the most recent 200 runs per rule. `rule_runs` is never client-writable. Visibility (ruling during Phase 1, tighter than the original draft): a personal rule's runs are visible to its owner; an **org** rule's runs are visible to admins/owners only — `trigger_summary` snapshots can contain other users' record data, so org-rule runs are not member-visible even though the org rule itself is. Phase 3 UI must build to this, not the earlier "whoever can read the rule" wording.
 
 ### Validation
 
