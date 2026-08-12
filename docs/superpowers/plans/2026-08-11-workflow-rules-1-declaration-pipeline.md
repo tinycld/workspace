@@ -1186,8 +1186,9 @@ git commit -m "feat(automation): derived client catalogs and dynamic-package pas
 ### Task 7: `rules` + `rule_runs` collections
 
 **Files:**
-- Create: `tinycld/core/server/pb_migrations/1910000000_create_rules.js`
-- Create: `tinycld/core/server/pb_migrations/1910000001_create_rule_runs.js`
+- Create: `tinycld/core/server/pb_migrations/1990000000_create_rules.js`
+- Create: `tinycld/core/server/pb_migrations/1990000001_create_rule_runs.js`
+  (amended during execution: the originally planned `1910000000`/`1910000001` collided with shipped migrations)
 - Modify: `tinycld/core/lib/pocketbase.ts` (collection registrations after `notifications` ~line 316, `coreStores` ~line 327)
 
 **Interfaces:**
@@ -1197,7 +1198,7 @@ git commit -m "feat(automation): derived client catalogs and dynamic-package pas
 - [ ] **Step 1: Write the rules migration**
 
 ```js
-// tinycld/core/server/pb_migrations/1910000000_create_rules.js
+// tinycld/core/server/pb_migrations/1990000000_create_rules.js
 /// <reference path="../pb_data/types.d.ts" />
 migrate(
     app => {
@@ -1315,7 +1316,7 @@ migrate(
 - [ ] **Step 2: Write the rule_runs migration**
 
 ```js
-// tinycld/core/server/pb_migrations/1910000001_create_rule_runs.js
+// tinycld/core/server/pb_migrations/1990000001_create_rule_runs.js
 /// <reference path="../pb_data/types.d.ts" />
 migrate(
     app => {
@@ -1450,7 +1451,7 @@ Expected: biome + tsc + vitest all pass. Fix any failure at its source.
 
 ```bash
 cd ~/code/tinycld/tinycld
-git add core/server/pb_migrations/1910000000_create_rules.js core/server/pb_migrations/1910000001_create_rule_runs.js core/lib/pocketbase.ts
+git add core/server/pb_migrations/1990000000_create_rules.js core/server/pb_migrations/1990000001_create_rule_runs.js core/lib/pocketbase.ts
 git commit -m "feat(automation): rules and rule_runs collections"
 ```
 
@@ -1472,7 +1473,10 @@ git commit -m "feat(automation): rules and rule_runs collections"
 ```ts
 // mail/tinycld/mail/automation.ts
 import type { AutomationDefinitions } from '@tinycld/core/lib/automation/types'
-import type { MailSchema } from '~/tinycld/mail/types'
+// Relative, NOT the ~/ self-alias: this module is config-reachable (imported by
+// the generated tinycld.config.ts under the app shell's tsconfig, where mail's
+// self-alias doesn't resolve) — same reason collections.ts imports './types'.
+import type { MailSchema } from './types'
 
 // NOTE: mail_messages has no user FK (mailboxes are shared) — personal-rule
 // owner resolution for this trigger is defined in the engine phase. No
