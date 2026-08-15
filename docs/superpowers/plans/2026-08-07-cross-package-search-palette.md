@@ -1,5 +1,25 @@
 # Cross-Package Search Palette Implementation Plan
 
+> **STATUS: implemented, with two structural changes from this plan.** The
+> palette, all four package adapters, the `core/fts` work and the cards route
+> shipped and merged. Two things were built differently, and the affected tasks
+> carry a note where they diverge:
+>
+> 1. **Search federates on the server, not in the browser.** The palette calls
+>    one endpoint — `GET /api/search` (`tinycld/core/server/search/`) — which
+>    fans out over Go-registered sources and returns normalized rows. The plan's
+>    design had the browser call each package's own route and normalize with a
+>    per-package TypeScript adapter. The reason for the change is recorded in
+>    `core/server/search/types.go`: a Go CLI cannot import TS adapters, so a
+>    terminal search would have had to reimplement every package's field mapping
+>    with nothing keeping the two copies honest.
+> 2. **Scoring is Go, not TypeScript.** Task 3's `lib/search/score.ts` was never
+>    built; `core/server/search/score.go` ranks the merged set instead.
+>
+> A follow-on phase added the `tinycld search` CLI command, the Go port of the
+> query grammar, and the shared golden fixture that pins the two parsers
+> together (`tinycld/cli/`).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a `/`-triggered command palette that searches across every installed package, with `pkg:` scope chips, `-term` exclusion, and cross-package relevance ordering.
@@ -25,6 +45,13 @@
 - Run `pnpm install` only at the workspace root, never inside a member.
 - Migrations: released ones are frozen. New schema ships as a NEW migration file.
 - Go tests: `go test -count=1` (the cache does not invalidate on migration changes).
+- **The positive-term gate (all FTS adapters).** Never emit an FTS5 `NOT` clause
+  unless that same query already carries at least one positive term. FTS5 errors
+  on a NOT-only MATCH expression — there is nothing to subtract from — so an
+  exclude-only query must yield an empty query, never a bare `NOT`. This is not
+  theoretical: mail shipped a "doesn't have" filter and had to remove it for
+  exactly this reason (commit `dc988fd`). `core/fts` enforces it centrally;
+  drive and mail each enforce it in their own copy.
 
 ---
 
@@ -90,7 +117,7 @@ Tasks 10 and 11 (mail/drive negation) are independent and can be done any time a
 
 No test — this file is types only, verified by `tsc` through its consumers.
 
-- [ ] **Step 1: Create the types file**
+- [x] **Step 1: Create the types file**
 
 ```ts
 /** One rendered row in the palette. Every adapter maps its hits to this. */
@@ -152,12 +179,12 @@ export interface SearchPackage {
 }
 ```
 
-- [ ] **Step 2: Typecheck**
+- [x] **Step 2: Typecheck**
 
 Run: `cd tinycld && pnpm exec tinycld-pkg typecheck`
 Expected: PASS (no consumers yet, but the file must be valid).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tinycld/core/lib/search/types.ts
@@ -181,7 +208,7 @@ Grammar rules, all tested below:
 - `-term` excludes, but only when `-` is at a term boundary (start of string or preceded by whitespace) and followed by a non-space.
 - `&&`, `||`, `!`, `AND`, `OR`, `NOT`, quotes, parens are stripped.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 import { parseQuery } from '@tinycld/core/lib/search/parse-query'
@@ -299,12 +326,12 @@ describe('parseQuery — empty input', () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd tinycld && pnpm exec vitest run tests/unit/search-parse-query.test.ts`
 Expected: FAIL — cannot resolve `@tinycld/core/lib/search/parse-query`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```ts
 import type { ParsedQuery } from './types'
@@ -313,7 +340,10 @@ import type { ParsedQuery } from './types'
 // supported: every backend already strips them (core/fts sanitize.go), and
 // passing incomplete expressions like `foo AND ` through to FTS5 turns a
 // half-typed query into a parse error under search-as-you-type.
-const OPERATOR_WORDS = /\b(AND|OR|NOT)\b/g
+// Bounded by whitespace or string edge, NOT \b: `\b` treats `-` as a word
+// boundary, so `plan-NOT-final.docx` would split into `plan-` and `-final.docx`
+// and the filename's own text would become an exclusion.
+const OPERATOR_WORDS = /(^|\s)(AND|OR|NOT)(?=\s|$)/g
 const OPERATOR_CHARS = /[&|!"'()]/g
 
 /**
@@ -329,7 +359,10 @@ export function parseQuery(input: string, installedSlugs: string[]): ParsedQuery
     const include: string[] = []
     const exclude: string[] = []
 
-    const cleaned = input.replace(OPERATOR_WORDS, ' ').replace(OPERATOR_CHARS, ' ')
+    // '$1' keeps the captured leading separator. The trailing side is a
+    // zero-width lookahead, so it is never consumed and two adjacent operator
+    // words ('a AND OR b') both strip.
+    const cleaned = input.replace(OPERATOR_WORDS, '$1').replace(OPERATOR_CHARS, ' ')
 
     for (const rawToken of cleaned.split(/\s+/)) {
         const token = rawToken.trim()
@@ -351,7 +384,9 @@ export function parseQuery(input: string, installedSlugs: string[]): ParsedQuery
         // split on whitespace first, any hyphen still inside a token is
         // mid-token by construction (budget-2026) and stays literal.
         if (token.startsWith('-')) {
-            const term = token.slice(1)
+            // Strip every leading hyphen, not just one: '--draft' should
+            // exclude 'draft', not the literal '-draft'.
+            const term = token.replace(/^-+/, '')
             if (term) exclude.push(term)
             continue
         }
@@ -363,12 +398,12 @@ export function parseQuery(input: string, installedSlugs: string[]): ParsedQuery
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd tinycld && pnpm exec vitest run tests/unit/search-parse-query.test.ts`
 Expected: PASS, 15 tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tinycld/core/lib/search/parse-query.ts tinycld/core/tests/unit/search-parse-query.test.ts
@@ -378,6 +413,15 @@ git commit -m "feat(search): parse chips, exclusions and strip operators"
 ---
 
 ### Task 3: Cross-package scoring
+
+> **SUPERSEDED — not built as written.** Scoring moved server-side with the
+> federated endpoint: `tinycld/core/server/search/score.go` (tested by
+> `score_test.go`) ranks the merged set before it reaches any client. No
+> `lib/search/score.ts` exists. `build-sections.ts` therefore does **not**
+> re-sort rows — it says so in its own comment, because re-sorting would either
+> duplicate the server's logic or silently disagree with it. The tier design and
+> the "why not BM25" rationale below still describe the shipped scorer; only the
+> language and location changed.
 
 **Files:**
 - Create: `tinycld/core/lib/search/score.ts`
@@ -389,7 +433,7 @@ git commit -m "feat(search): parse chips, exclusions and strip operators"
 
 Why not BM25: FTS5 ranks are computed against each table's own corpus, so a drive score and a mail score are in different units. See the spec's "Cross-package scoring".
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 import { compareRows, scoreRow } from '@tinycld/core/lib/search/score'
@@ -491,12 +535,12 @@ describe('compareRows — cross-package ordering', () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd tinycld && pnpm exec vitest run tests/unit/search-score.test.ts`
 Expected: FAIL — cannot resolve `@tinycld/core/lib/search/score`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```ts
 import type { SearchRow } from './types'
@@ -575,12 +619,12 @@ export function compareRows(
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd tinycld && pnpm exec vitest run tests/unit/search-score.test.ts`
 Expected: PASS, 10 tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tinycld/core/lib/search/score.ts tinycld/core/tests/unit/search-score.test.ts
@@ -601,7 +645,7 @@ git commit -m "feat(search): score rows by match quality across packages"
 
 Grouping rule from the spec: zero chips → one flat score-ordered section with badges; one chip → one flat section, no badges; 2+ chips → one section per package ordered by `nav.order`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 import { buildSections } from '@tinycld/core/lib/search/build-sections'
@@ -677,12 +721,12 @@ describe('buildSections', () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd tinycld && pnpm exec vitest run tests/unit/search-build-sections.test.ts`
 Expected: FAIL — cannot resolve `@tinycld/core/lib/search/build-sections`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```ts
 import { compareRows } from './score'
@@ -741,12 +785,12 @@ export function buildSections(
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd tinycld && pnpm exec vitest run tests/unit/search-build-sections.test.ts`
 Expected: PASS, 5 tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tinycld/core/lib/search/build-sections.ts tinycld/core/tests/unit/search-build-sections.test.ts
@@ -767,7 +811,7 @@ git commit -m "feat(search): build flat or grouped result sections"
 
 Selection is tracked by **row id, not index**, because the flat list re-sorts as slower packages resolve and an index would move the cursor to a different row. Not persisted — a restored palette would greet the user with a dialog they did not open.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 import { useSearchPaletteStore } from '@tinycld/core/lib/search/search-palette-store'
@@ -820,12 +864,12 @@ describe('useSearchPaletteStore', () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd tinycld && pnpm exec vitest run tests/unit/search-palette-store.test.ts`
 Expected: FAIL — cannot resolve the store module.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```ts
 import { create } from '@tinycld/core/lib/store'
@@ -860,12 +904,12 @@ export const useSearchPaletteStore = create<SearchPaletteState>()(set => ({
 }))
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd tinycld && pnpm exec vitest run tests/unit/search-palette-store.test.ts`
 Expected: PASS, 5 tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tinycld/core/lib/search/search-palette-store.ts tinycld/core/tests/unit/search-palette-store.test.ts
@@ -876,10 +920,21 @@ git commit -m "feat(search): add the palette store"
 
 ### Task 6: Manifest field + generator wiring
 
+> **CHANGED — the manifest `search` field has no `endpoint`.** It ships as
+> `{ adapter, label? }` only. Rows come from core's federated `/api/search`,
+> which reads each package's Go-registered search source, so a per-package
+> endpoint would have no reader; the adapter narrowed to just
+> `useSearchActions` (the selection handler) since normalization is now the
+> server's job. See the field's doc comment in `core/lib/packages/types.ts`.
+> The bare-thunk emit described below is real and still applies.
+
 **Files:**
 - Modify: `tinycld/core/lib/packages/types.ts` (add `search` to `PackageManifest`)
 - Modify: `tinycld/core/lib/packages/config-types.ts` (add `search` to `PackageEntry`)
 - Modify: `tinycld/scripts/load-manifest.ts` (carry `search` through)
+- Modify: `tinycld/scripts/describe-packages.ts` (carry `search` into `ConfigPkg` —
+  `generate.ts:556` routes every package through `manifestToConfigPkg`, so without
+  this the field is silently dropped before the generator ever sees it)
 - Modify: `tinycld/scripts/gen-config.ts` (validate + emit)
 - Create: `tinycld/core/lib/search/registry.ts`
 - Test: `tinycld/core/tests/unit/search-registry.test.ts`
@@ -890,7 +945,7 @@ git commit -m "feat(search): add the palette store"
 
 **Critical:** every component the generator emits today is wrapped in `lazy(...)`. An adapter is a module of two non-component exports, so it must be emitted as a **bare thunk** — `load: () => import('...')` — not `lazy(() => import('...'))`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 import { deriveSearchPackages } from '@tinycld/core/lib/search/registry'
@@ -940,12 +995,12 @@ describe('deriveSearchPackages', () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd tinycld && pnpm exec vitest run tests/unit/search-registry.test.ts`
 Expected: FAIL — cannot resolve `@tinycld/core/lib/search/registry`.
 
-- [ ] **Step 3: Add the manifest field**
+- [x] **Step 3: Add the manifest field**
 
 In `tinycld/core/lib/packages/types.ts`, add to `PackageManifest` after `help`:
 
@@ -974,7 +1029,7 @@ In `tinycld/core/lib/packages/config-types.ts`, add to the `PackageEntry` interf
     }
 ```
 
-- [ ] **Step 4: Wire the generator**
+- [x] **Step 4: Wire the generator**
 
 In `tinycld/scripts/load-manifest.ts`, add `search` to the manifest interface so it survives loading:
 
@@ -1006,7 +1061,7 @@ and emit it inside the entry, after the `sidebarContributions` block:
 
 Also add `search` to the `ConfigPackage`-shaped type in `gen-config.ts` so `p.search` typechecks.
 
-- [ ] **Step 5: Write the registry**
+- [x] **Step 5: Write the registry**
 
 Create `tinycld/core/lib/search/registry.ts`:
 
@@ -1057,17 +1112,17 @@ export async function loadSearchAdapter(slug: string): Promise<SearchAdapterModu
 }
 ```
 
-- [ ] **Step 6: Run test to verify it passes**
+- [x] **Step 6: Run test to verify it passes**
 
 Run: `cd tinycld && pnpm exec vitest run tests/unit/search-registry.test.ts`
 Expected: PASS, 4 tests.
 
-- [ ] **Step 7: Regenerate and typecheck**
+- [x] **Step 7: Regenerate and typecheck**
 
 Run: `cd tinycld && pnpm run packages:generate && pnpm exec tinycld-pkg typecheck`
 Expected: PASS. No package declares `search` yet, so the generated config is unchanged.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add tinycld/core/lib/packages/types.ts tinycld/core/lib/packages/config-types.ts \
@@ -1092,7 +1147,7 @@ git commit -m "feat(search): add the search manifest contribution and registry"
 
 Three changes bundled because they touch the same two files and one migration of callers. `ExcludeField` is separate from `SoftDeleteField` because cards' `archived` is a **bool**, and `field = ''` against a bool misbehaves under SQLite's loose typing.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `tinycld/core/server/fts/search_test.go`:
 
@@ -1108,13 +1163,19 @@ func TestOwnerScopeClause(t *testing.T) {
 }
 
 func TestMemberScopeClause(t *testing.T) {
+	// MemberField and RecordField are deliberately DIFFERENT here so that
+	// swapping them in clause() changes the emitted SQL and fails this test.
+	// The real cards config uses "project" for both (that is how the schema is
+	// shaped) — with matching values a field swap is invisible, which would
+	// leave the only consumer of MemberScope untested against a bug that
+	// scopes on the wrong column.
 	s := MemberScope{
 		Table:       "cards_project_members",
-		MemberField: "project",
+		MemberField: "proj_id",
 		UserField:   "user",
 		RecordField: "project",
 	}
-	want := "c.project IN (SELECT project FROM cards_project_members WHERE user = {:scopeUser})"
+	want := "c.project IN (SELECT proj_id FROM cards_project_members WHERE user = {:scopeUser})"
 	if got := s.clause(); got != want {
 		t.Errorf("clause() = %q, want %q", got, want)
 	}
@@ -1133,12 +1194,12 @@ func TestExcludeClause(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd tinycld/core/server && go test ./fts/ -run 'Scope|Exclude' -count=1`
 Expected: FAIL — `OwnerScope.clause` undefined, `MemberScope` undefined, `excludeClause` undefined.
 
-- [ ] **Step 3: Implement in config.go**
+- [x] **Step 3: Implement in config.go**
 
 Replace the `OwnerScope` block at the end of `config.go`:
 
@@ -1210,7 +1271,7 @@ Then in the `Config` struct, replace the `Owner OwnerScope` field:
 	ExcludeField string
 ```
 
-- [ ] **Step 4: Implement in search.go**
+- [x] **Step 4: Implement in search.go**
 
 Replace the params/inClause setup and the `base` construction:
 
@@ -1254,7 +1315,12 @@ func excludeClause(cfg Config) string {
 // isDisabled reports whether the user record is missing or flagged disabled.
 // A missing record is treated as disabled: a token for a deleted user must not
 // keep reading.
-func isDisabled(app *pocketbase.PocketBase, userID string) bool {
+// Takes core.App (the interface), NOT the concrete *pocketbase.PocketBase:
+// tests.NewTestApp() returns *tests.TestApp, and the two do not interconvert,
+// so a concrete parameter makes this security check untestable. Drive already
+// uses core.App for the same reason (drive/server/search.go:130). `Search`
+// itself must be widened the same way.
+func isDisabled(app core.App, userID string) bool {
 	user, err := app.FindRecordById("users", userID)
 	if err != nil || user == nil {
 		return true
@@ -1263,7 +1329,7 @@ func isDisabled(app *pocketbase.PocketBase, userID string) bool {
 }
 ```
 
-- [ ] **Step 5: Update the only caller**
+- [x] **Step 5: Update the only caller**
 
 In `contacts/server/register.go`, change `Owner: fts.OwnerScope{Field: "owner"},` to:
 
@@ -1271,7 +1337,7 @@ In `contacts/server/register.go`, change `Owner: fts.OwnerScope{Field: "owner"},
 	Scope: fts.OwnerScope{Field: "owner"},
 ```
 
-- [ ] **Step 6: Run tests to verify they pass**
+- [x] **Step 6: Run tests to verify they pass**
 
 Run: `cd tinycld/core/server && go test ./fts/ -count=1`
 Expected: PASS.
@@ -1279,7 +1345,7 @@ Expected: PASS.
 Run: `cd contacts/server && go build ./... && go test ./... -count=1`
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git -C tinycld add core/server/fts/config.go core/server/fts/search.go core/server/fts/search_test.go
@@ -1304,7 +1370,7 @@ git -C contacts commit -m "refactor(search): rename Owner to Scope for the fts i
 
 The client sends exclusions as a separate `not` param — no backend ever parses operator syntax, so `sanitize.go`'s injection defense stays intact.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `tinycld/core/server/fts/sanitize_test.go`:
 
@@ -1354,12 +1420,12 @@ func TestExclusionRemovesMatchingRow(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd tinycld/core/server && go test ./fts/ -run Exclusion -count=1`
 Expected: FAIL — `SanitizeQueryWithExclusions` undefined.
 
-- [ ] **Step 3: Implement in sanitize.go**
+- [x] **Step 3: Implement in sanitize.go**
 
 ```go
 // SanitizeQueryWithExclusions builds an FTS5 MATCH expression requiring every
@@ -1384,7 +1450,7 @@ func SanitizeQueryWithExclusions(include, exclude string) string {
 }
 ```
 
-- [ ] **Step 4: Thread it through search.go and register.go**
+- [x] **Step 4: Thread it through search.go and register.go**
 
 In `search.go`, add to `SearchOpts`:
 
@@ -1405,12 +1471,12 @@ In `register.go`, add to the `SearchOpts` literal:
 			Exclude:        q.Get("not"),
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run: `cd tinycld/core/server && go test ./fts/ -count=1`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git -C tinycld add core/server/fts/sanitize.go core/server/fts/sanitize_test.go \
@@ -1433,7 +1499,7 @@ git -C tinycld commit -m "feat(fts): support term exclusion via the not param"
 
 Migrations are append-only; 1980000000 and 1980000001 are shipped and frozen. Unlike contacts/drive/mail, `cards_cards` already shipped, so the migration must **backfill** — sync hooks only fire on future writes.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `cards/server/search_scope_test.go`, modeled on `drive/server/search_disabled_test.go` (a hand-built minimal schema, not `rlstest` — raw SQL bypasses the rule engine):
 
@@ -1669,12 +1735,12 @@ func seedProjectWithCard(t *testing.T, app *tests.TestApp, title string) (string
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd cards/server && go test ./... -run Search -count=1`
 Expected: FAIL — `ftsConfig` undefined.
 
-- [ ] **Step 3: Write the migration**
+- [x] **Step 3: Write the migration**
 
 Create `cards/pb-migrations/1980000002_create_fts_cards.js`, copying the `types.d.ts` reference-path convention from the sibling `1980000001` file:
 
@@ -1707,7 +1773,7 @@ migrate(
 )
 ```
 
-- [ ] **Step 4: Wire the server**
+- [x] **Step 4: Wire the server**
 
 In `cards/server/register.go`, add near the top-level vars:
 
@@ -1749,12 +1815,12 @@ and inside `registerShared`:
 
 Add `"tinycld.org/core/fts"` to the imports.
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run: `cd cards/server && go build ./... && go test ./... -count=1`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git -C cards add pb-migrations/1980000002_create_fts_cards.js server/register.go server/search_scope_test.go
@@ -1768,15 +1834,41 @@ git -C cards commit -m "feat(search): index cards for full-text search"
 **Files:**
 - Modify: `mail/server/search.go` (`buildThreadFTSQuery`, `buildMessageFTSQuery`)
 - Modify: `mail/server/endpoints_search.go` (read the `not` param)
+- Modify: `mail/server/search_advanced_test.go` — **amend** the existing
+  `"never emits a NOT clause"` subtest (see below); do NOT delete it
 - Test: `mail/server/search_negation_test.go`
 
 **Interfaces:**
 - Consumes: nothing (mail keeps its own engine)
-- Produces: mail's `/api/mail/search` honors `?not=`
+- Produces: mail's `/api/mail/search` honors `?not=`, **gated on a positive term**
 
 **This is the highest-risk task in the plan.** Mail unions two FTS indexes. A negation applied to only one arm silently returns the rows the user asked to exclude, via the other arm.
 
-- [ ] **Step 1: Write the failing test**
+**This task reintroduces a feature mail deliberately removed.** Commit `dc988fd`
+(2026-06-04) dropped a "doesn't have" NOT filter because *"FTS5 NOT-only queries
+error without a positive term"*, and left a regression guard behind:
+`search_advanced_test.go` asserts `buildMessageFTSQuery` **never** emits a `NOT`
+clause. Reintroducing exclusion is only safe because of the positive-term gate
+in `appendExclusions`.
+
+That guard must be **amended, not deleted** — it still encodes a real
+constraint. Rewrite it to assert the gate rather than a blanket prohibition:
+
+- no positive term (e.g. `buildMessageFTSQuery("", "", exclude)`) → **no `NOT`
+  in the output**, exactly as the original guard demanded
+- positive term present → `NOT` clauses **are** expected
+
+Keep the original cases that have no positive term passing unchanged, and
+preserve the comment explaining why a NOT-only query is illegal, updating it to
+describe the gate. Anyone reading it later must be able to tell that the
+prohibition was narrowed deliberately, not weakened by accident.
+
+**The gate is an ecosystem-wide invariant, not a mail quirk:** every FTS adapter
+must refuse to emit a `NOT` without a positive term. `core/fts` already does
+(`SanitizeQueryWithExclusions` returns `""` when the include side is empty), so
+cards and contacts inherit it; drive gets it in Task 11.
+
+- [x] **Step 1: Write the failing test**
 
 Create `mail/server/search_negation_test.go`:
 
@@ -1822,12 +1914,12 @@ func stringIndex(haystack, needle string) int {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd mail/server && go test ./... -run Union -count=1`
 Expected: FAIL — `buildThreadFTSQuery` takes 1 argument, not 2.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `mail/server/search.go`, add the exclusion helper and thread it into both builders:
 
@@ -1835,6 +1927,15 @@ In `mail/server/search.go`, add the exclusion helper and thread it into both bui
 // appendExclusions adds a NOT clause per excluded term. Applied to EVERY arm of
 // the search UNION: an exclusion missing from one arm lets that arm return the
 // rows the user asked to exclude.
+//
+// THE POSITIVE-TERM GATE: never emit a NOT unless `base` already carries at
+// least one positive term. FTS5 errors on a NOT-only MATCH expression — there
+// is no result set to subtract from. Mail shipped a "doesn't have" filter once
+// and had to remove it for exactly this reason (commit dc988fd, 2026-06-04,
+// "FTS5 NOT-only queries error without a positive term"), leaving behind the
+// regression guard in search_advanced_test.go. Returning `base` unchanged when
+// it is empty is what makes reintroducing exclusion safe. Do not "simplify"
+// this guard away.
 func appendExclusions(base, exclude string) string {
 	if base == "" {
 		return ""
@@ -1870,12 +1971,12 @@ Update both call sites in `endpoints_search.go` to pass the new argument, and ad
 
 with a matching `Exclude string` field on `api.SearchRequest`.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `cd mail/server && go build ./... && go test ./... -count=1`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git -C mail add server/search.go server/endpoints_search.go server/search_negation_test.go
@@ -1896,7 +1997,15 @@ git -C mail commit -m "feat(search): honor term exclusions in both search arms"
 
 Drive carries its own copy of `sanitizeFTSQuery` — a second instance of the drift that motivates eventually folding drive onto `core/fts`.
 
-- [ ] **Step 1: Write the failing test**
+**The positive-term gate applies here too.** Every FTS adapter in the ecosystem
+must refuse to emit a `NOT` clause unless the same query already has at least
+one positive term: FTS5 errors on a NOT-only MATCH expression. `core/fts`
+enforces it for cards and contacts, mail gets it in Task 10, and
+`TestExcludeOnlyReturnsEmpty` below is drive's enforcement. Mail learned this
+the hard way — it removed an entire "doesn't have" filter over it (commit
+`dc988fd`). Keep that test even if the implementation looks obviously correct.
+
+- [x] **Step 1: Write the failing test**
 
 ```go
 package drive
@@ -1923,12 +2032,12 @@ func TestExcludeOnlyReturnsEmpty(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd drive/server && go test ./... -run Exclusi -count=1`
 Expected: FAIL — `sanitizeFTSQueryWithExclusions` undefined.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `drive/server/search.go`:
 
@@ -1952,12 +2061,12 @@ func sanitizeFTSQueryWithExclusions(include, exclude string) string {
 
 Change `searchDriveItems` to take an `exclude string` parameter and use the new function; in `handleDriveSearch`, pass `re.Request.URL.Query().Get("not")`.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `cd drive/server && go build ./... && go test ./... -count=1`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git -C drive add server/search.go server/search_negation_test.go
@@ -1967,6 +2076,11 @@ git -C drive commit -m "feat(search): honor term exclusions"
 ---
 
 ### Task 12: Package adapters (cards, contacts, drive, mail)
+
+> **CHANGED — adapters export `useSearchActions` only.** All four shipped, but
+> without `toRow`: the server normalizes rows now, so the client half of the
+> adapter is just the selection handler. The `projectByCardId` question flagged
+> in "Notes for the implementer" was resolved this way too.
 
 **Files (per package):**
 - Create: `<pkg>/tinycld/<slug>/search-adapter.ts`
@@ -1980,7 +2094,7 @@ git -C drive commit -m "feat(search): honor term exclusions"
 
 All four follow one shape. **Cards is shown in full**; the other three repeat the same structure with their own field mappings — do not skip writing them out.
 
-- [ ] **Step 1: Write the failing cards test**
+- [x] **Step 1: Write the failing cards test**
 
 Create `cards/tests/search-adapter.test.ts`:
 
@@ -2000,12 +2114,12 @@ describe('cards toRow', () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd cards && pnpm exec vitest run tests/search-adapter.test.ts`
 Expected: FAIL — cannot resolve `@tinycld/cards/search-adapter`.
 
-- [ ] **Step 3: Write the cards adapter**
+- [x] **Step 3: Write the cards adapter**
 
 Create `cards/tinycld/cards/search-adapter.ts`:
 
@@ -2072,7 +2186,7 @@ Add `projectByCardId` to `cards/tinycld/cards/stores/cards-ui-store.ts` — it r
 
 If the board screen does not already maintain such a map, implement `projectByCardId` by reading the cards collection through `useStore('cards_cards')` inside `useSearchActions` instead, and adjust the test accordingly.
 
-- [ ] **Step 4: Declare the contribution**
+- [x] **Step 4: Declare the contribution**
 
 In `cards/manifest.ts`, add after `help`:
 
@@ -2086,7 +2200,7 @@ In `cards/package.json` `exports`:
         "./search-adapter": "./tinycld/cards/search-adapter.ts",
 ```
 
-- [ ] **Step 5: Repeat for contacts, drive and mail**
+- [x] **Step 5: Repeat for contacts, drive and mail**
 
 `contacts/tinycld/contacts/search-adapter.ts`:
 
@@ -2199,13 +2313,13 @@ export function useSearchActions() {
 
 Add the matching `search` manifest block and `./search-adapter` export to each of the three packages, and write a `tests/search-adapter.test.ts` per package asserting `toRow` maps that package's real hit shape (including the empty-title fallback).
 
-- [ ] **Step 6: Regenerate and run all four test suites**
+- [x] **Step 6: Regenerate and run all four test suites**
 
 Run: `cd tinycld && pnpm run packages:generate`
 Then: `cd cards && pnpm exec tinycld-pkg check` (repeat for contacts, drive, mail)
 Expected: PASS.
 
-- [ ] **Step 7: Commit (one per repo)**
+- [x] **Step 7: Commit (one per repo)**
 
 ```bash
 git -C cards add manifest.ts package.json tinycld/cards/search-adapter.ts \
@@ -2223,6 +2337,8 @@ git -C cards commit -m "feat(search): contribute a search adapter to the palette
 - Create: `tinycld/core/components/search-palette/SearchPalette.tsx`
 - Create: `tinycld/core/components/search-palette/useSearchResults.ts`
 - Create: `tinycld/core/lib/search/use-active-package-slug.ts`
+- Create: `tinycld/core/lib/use-debounced-value.ts` (extracted — see Step 1)
+- Modify: `tinycld/core/lib/use-api-search.ts` (import the extracted helper)
 - Modify: `tinycld/core/components/CoreShortcuts.tsx` (register `/`)
 - Modify: the app shell layout that already mounts `HelpSearchPalette`, to mount `SearchPalette` alongside it
 
@@ -2232,22 +2348,58 @@ git -C cards commit -m "feat(search): contribute a search adapter to the palette
 
 Mirror `HelpSearchPalette`'s `.web.tsx` / `.tsx` split exactly. These land under core's existing `./components/*` wildcard export — no `package.json` change.
 
-- [ ] **Step 1: Write the results hook**
+- [x] **Step 1: Extract the debounce helper**
 
-Create `useSearchResults.ts`:
+`useApiSearch` fetches ONE endpoint, so the palette cannot use it for an
+N-package fan-out. But its 300ms debounce is still needed, and duplicating it
+would let the two drift. Move `useDebouncedValue` out of
+`tinycld/core/lib/use-api-search.ts` into `tinycld/core/lib/use-debounced-value.ts`
+verbatim, export it, and have `use-api-search.ts` import it. No behavior change.
 
 ```ts
-import { useApiSearch } from '@tinycld/core/lib/use-api-search'
+import { useEffect, useState } from 'react'
+
+// Debounce a value: only surface the latest after `delayMs` of quiet. Genuine
+// timer side-effect (not a server-data sync), so it stays in an effect.
+export function useDebouncedValue<T>(value: T, delayMs: number): T {
+    const [debounced, setDebounced] = useState(value)
+    useEffect(() => {
+        const timer = setTimeout(() => setDebounced(value), delayMs)
+        return () => clearTimeout(timer)
+    }, [value, delayMs])
+    return debounced
+}
+```
+
+Run `cd tinycld && pnpm exec vitest run tests/unit/` and confirm any existing
+`use-api-search` tests still pass before continuing.
+
+- [x] **Step 2: Write the results hook**
+
+Create `useSearchResults.ts`. **Use `useQueries`, not a loop of `useApiSearch`
+calls** — the in-scope package list is dynamic, and calling a hook per package
+in a `for` loop violates the Rules of Hooks. `useQueries` takes a dynamic array
+and is the supported API for exactly this.
+
+```ts
+import { useQueries } from '@tanstack/react-query'
+import { pb } from '@tinycld/core/lib/pocketbase'
 import { buildSections, type SearchSection } from '@tinycld/core/lib/search/build-sections'
 import { loadSearchAdapter, searchPackages } from '@tinycld/core/lib/search/registry'
 import type { ParsedQuery, SearchAdapterModule, SearchRow } from '@tinycld/core/lib/search/types'
-import { useEffect, useState } from 'react'
+import { useDebouncedValue } from '@tinycld/core/lib/use-debounced-value'
+
+const MIN_QUERY_LENGTH = 2
+const DEBOUNCE_MS = 300
 
 /**
  * Fan out one search per in-scope package and merge the results.
  *
- * Each package fetches independently so a slow one cannot hold up the rest —
- * useApiSearch already debounces and aborts superseded requests.
+ * useQueries rather than a loop of single-query hooks: the in-scope list
+ * changes as the user adds and removes chips, and a hook called per iteration
+ * of a `for` loop breaks the Rules of Hooks. React Query also gives each
+ * package independent caching and abort-on-supersede for free, so a slow
+ * package cannot hold up the rest.
  */
 export function useSearchResults(parsed: ParsedQuery): {
     sections: SearchSection[]
@@ -2258,62 +2410,67 @@ export function useSearchResults(parsed: ParsedQuery): {
             ? searchPackages.filter(p => parsed.chips.includes(p.slug))
             : searchPackages
 
-    const [adapters, setAdapters] = useState<Record<string, SearchAdapterModule>>({})
+    const query = useDebouncedValue(parsed.include.join(' '), DEBOUNCE_MS)
+    const not = useDebouncedValue(parsed.exclude.join(' '), DEBOUNCE_MS)
+    const enabled = query.length >= MIN_QUERY_LENGTH
 
-    // Adapter modules are dynamic imports, so resolving them is a genuine
-    // async side-effect rather than derived state.
-    useEffect(() => {
-        let cancelled = false
-        Promise.all(
-            scoped.map(async p => [p.slug, await loadSearchAdapter(p.slug)] as const)
-        ).then(pairs => {
-            if (cancelled) return
-            const next: Record<string, SearchAdapterModule> = {}
-            for (const [slug, mod] of pairs) if (mod) next[slug] = mod
-            setAdapters(next)
-        })
-        return () => {
-            cancelled = true
-        }
-    }, [scoped.map(p => p.slug).join(',')])
+    // Adapter modules are dynamic imports. Running them through Query rather
+    // than an effect keeps the resolution cached and out of component state;
+    // loadSearchAdapter already memoizes, so this is belt-and-braces.
+    const adapterQueries = useQueries({
+        queries: scoped.map(pkg => ({
+            queryKey: ['search-adapter', pkg.slug],
+            queryFn: () => loadSearchAdapter(pkg.slug),
+            staleTime: Number.POSITIVE_INFINITY,
+        })),
+    })
 
-    const query = parsed.include.join(' ')
+    const searchQueries = useQueries({
+        queries: scoped.map(pkg => ({
+            queryKey: ['package-search', pkg.slug, query, not],
+            queryFn: ({ signal }: { signal: AbortSignal }) =>
+                pb.send(pkg.endpoint, {
+                    method: 'GET',
+                    query: not ? { q: query, not } : { q: query },
+                    signal,
+                }),
+            enabled,
+            // A search is point-in-time: don't retry a failure (the user is
+            // still typing) and don't refetch on window focus.
+            retry: false,
+            refetchOnWindowFocus: false,
+        })),
+    })
+
     const rowsBySlug: Record<string, SearchRow[]> = {}
     let isSearching = false
 
-    for (const pkg of searchPackages) {
-        const inScope = scoped.some(p => p.slug === pkg.slug)
-        // Hooks cannot be called conditionally, so every package's hook runs
-        // and out-of-scope ones are simply disabled by an empty query.
-        const { results, isSearching: pending } = useApiSearch<unknown>(inScope ? query : '', {
-            endpoint: pkg.endpoint,
-            buildQueryParams: (q: string) => {
-                const params: Record<string, string> = { q }
-                if (parsed.exclude.length > 0) params.not = parsed.exclude.join(' ')
-                return params
-            },
-            extractResults: (response: unknown) =>
-                (response as { items?: unknown[] }).items ?? [],
-        })
-        if (!inScope) continue
-        if (pending) isSearching = true
+    scoped.forEach((pkg, i) => {
+        if (searchQueries[i]?.isFetching) isSearching = true
 
-        const adapter = adapters[pkg.slug]
-        if (!adapter) continue
-        rowsBySlug[pkg.slug] = results
+        const adapter = adapterQueries[i]?.data as SearchAdapterModule | null | undefined
+        const data = searchQueries[i]?.data as { items?: unknown[] } | undefined
+        if (!adapter || !data?.items) return
+
+        // A package whose request failed simply contributes no rows — one
+        // backend erroring must not empty the whole palette.
+        rowsBySlug[pkg.slug] = data.items
             .map(hit => adapter.toRow(hit))
             .filter((r): r is Omit<SearchRow, 'slug'> => r !== null)
             .map(r => ({ ...r, slug: pkg.slug }))
-    }
+    })
 
     return {
+        // Ordering lives entirely here and is unaffected by fetch order:
+        // compareRows tie-breaks on nav.order precisely so a late-arriving
+        // package cannot change the ranking of what already landed.
         sections: buildSections(rowsBySlug, searchPackages, parsed.chips, parsed.include),
         isSearching,
     }
 }
 ```
 
-- [ ] **Step 2: Write the shell**
+- [x] **Step 3: Write the shell**
 
 Create `SearchPalette.web.tsx` following `HelpSearchPalette.web.tsx`'s structure: a module-level `<style>` injection with the id `tinycld-search-palette-styles` (distinct from help's, so the two cannot collide), `createPortal` to `document.body`, a capture-phase `keydown` listener, and click-outside dismiss.
 
@@ -2399,18 +2556,74 @@ function Hints({ items }: { items: string[] }) {
 
 Selection dispatch — every in-scope adapter's hook is called at the top level, then indexed:
 
+`useSearchActions` is a genuine per-package hook and cannot go through Query.
+Give each package a fixed child component so its hook sits at a component's top
+level — iterating `searchPackages` (module-constant, never reordered at runtime)
+rather than the filtered in-scope list keeps the number and order of hook calls
+identical on every render:
+
 ```tsx
-// Hooks cannot be called conditionally at selection time, so build the whole
-// map up front and index it on Enter.
-const actionsBySlug: Record<string, { onSelect: (row: SearchRow) => void }> = {}
-for (const pkg of searchPackages) {
-    const adapter = adapters[pkg.slug]
-    actionsBySlug[pkg.slug] = adapter?.useSearchActions() ?? { onSelect: () => {} }
+type SelectHandler = (row: SearchRow) => void
+
+/**
+ * Registers one package's selection handler. A component per package rather
+ * than a loop of hook calls inside the palette: `useSearchActions` is a hook,
+ * and calling it in a loop would break the Rules of Hooks the moment the
+ * package list changed. Renders nothing.
+ */
+function PackageActions({
+    slug,
+    onReady,
+}: {
+    slug: string
+    onReady: (slug: string, handler: SelectHandler) => void
+}) {
+    const adapter = useAdapterModule(slug)
+    const actions = adapter?.useSearchActions()
+    // Registering during render would mutate a parent ref mid-render; a ref
+    // write in an effect is the standard imperative-handle pattern.
+    useEffect(() => {
+        if (actions) onReady(slug, actions.onSelect)
+    }, [slug, actions, onReady])
+    return null
 }
+```
+
+The palette holds the handlers in a ref (not state — a handler landing must not
+trigger a re-render) and indexes it on Enter:
+
+```tsx
+const handlersRef = useRef<Record<string, SelectHandler>>({})
+const registerHandler = useCallback((slug: string, handler: SelectHandler) => {
+    handlersRef.current[slug] = handler
+}, [])
 
 function selectRow(row: SearchRow) {
-    actionsBySlug[row.slug]?.onSelect(row)
+    handlersRef.current[row.slug]?.(row)
     close()
+}
+```
+
+and renders one `PackageActions` per installed package inside the palette:
+
+```tsx
+{searchPackages.map(pkg => (
+    <PackageActions key={pkg.slug} slug={pkg.slug} onReady={registerHandler} />
+))}
+```
+
+`useAdapterModule(slug)` is a one-line `useQuery` wrapper over
+`loadSearchAdapter`, sharing the `['search-adapter', slug]` key with
+`useSearchResults` so the module resolves once:
+
+```tsx
+function useAdapterModule(slug: string): SearchAdapterModule | null {
+    const { data } = useQuery({
+        queryKey: ['search-adapter', slug],
+        queryFn: () => loadSearchAdapter(slug),
+        staleTime: Number.POSITIVE_INFINITY,
+    })
+    return (data as SearchAdapterModule | null) ?? null
 }
 ```
 
@@ -2426,7 +2639,7 @@ export function SearchPalette() {
 }
 ```
 
-- [ ] **Step 3: Register the shortcut**
+- [x] **Step 4: Register the shortcut**
 
 There is no existing "which package am I in" helper, so add one first. Create
 `tinycld/core/lib/search/use-active-package-slug.ts`:
@@ -2478,23 +2691,25 @@ add `activeSlug` to the `useMemo` dependency array, and add to the shortcuts lis
 Import `useSearchPaletteStore` from `@tinycld/core/lib/search/search-palette-store`
 and `useActivePackageSlug` from `@tinycld/core/lib/search/use-active-package-slug`.
 
-- [ ] **Step 4: Mount the palette**
+- [x] **Step 5: Mount the palette**
 
 Find where `HelpSearchPalette` is mounted in the app shell and mount `SearchPalette` beside it.
 
 Run: `cd tinycld && grep -rn "HelpSearchPalette" app/ core/components/ --include='*.tsx' | grep -v 'help/'`
 
-- [ ] **Step 5: Verify**
+- [x] **Step 6: Verify**
 
 Run: `cd tinycld && pnpm exec tinycld-pkg check`
 Expected: PASS.
 
 Manually: start the app, press `/`, confirm the palette opens seeded with the current package, typing returns results, `Escape` closes.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
-git -C tinycld add core/components/search-palette/ core/components/CoreShortcuts.tsx app/
+git -C tinycld add core/components/search-palette/ core/components/CoreShortcuts.tsx \
+                  core/lib/search/use-active-package-slug.ts \
+                  core/lib/use-debounced-value.ts core/lib/use-api-search.ts app/
 git -C tinycld commit -m "feat(search): add the cross-package search palette"
 ```
 
@@ -2511,7 +2726,7 @@ git -C tinycld commit -m "feat(search): add the cross-package search palette"
 
 Cross-package, so the spec lives at the workspace root rather than in one member.
 
-- [ ] **Step 1: Write the help topic**
+- [x] **Step 1: Write the help topic**
 
 Create `tinycld/core/help/search.md`:
 
@@ -2565,11 +2780,11 @@ combined automatically — every word you type has to match.
 - `esc` — close
 ```
 
-- [ ] **Step 2: Regenerate help**
+- [x] **Step 2: Regenerate help**
 
 Run: `cd tinycld && pnpm run packages:generate`
 
-- [ ] **Step 3: Write the e2e spec**
+- [x] **Step 3: Write the e2e spec**
 
 Create `tinycld/tests/e2e/search-palette.spec.ts`:
 
@@ -2653,12 +2868,12 @@ Add the seeded-data-dependent cases once the seed content is known:
 
 Add `data-testid` attributes to the palette shell for `search-chip-<slug>` and the dialog while writing these.
 
-- [ ] **Step 4: Run e2e**
+- [x] **Step 4: Run e2e**
 
 Run: `cd tinycld && pnpm exec playwright test tests/e2e/search-palette.spec.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Full gate**
+- [x] **Step 5: Full gate**
 
 ```bash
 cd tinycld && pnpm run packages:generate && pnpm run lint && pnpm run pkg:check
@@ -2671,7 +2886,7 @@ cd contacts/server && go test ./... -count=1
 
 Expected: all PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git -C tinycld add tests/e2e/search-palette.spec.ts core/help/search.md
