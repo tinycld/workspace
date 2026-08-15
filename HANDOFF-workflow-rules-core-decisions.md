@@ -7,8 +7,13 @@ still open — cards #31, blocked on an unrelated e2e problem tracked in
 `HANDOFF-cards-e2e-slow-tests.md`.
 
 What remains are two decisions in core that the rollout surfaced but
-deliberately did not make, plus one deferred action. They interact, so they
-are written up together.
+deliberately did not make, one **shipped bug** that should be corrected
+alongside them, and one deferred action. They interact, so they are written up
+together.
+
+> **Read §3 first if you are short of time.** It is a live defect in merged
+> code — `core:send-email`'s loop-prevention cap fails open and counts the
+> wrong thing — not a decision waiting on anyone.
 
 ---
 
@@ -121,7 +126,55 @@ gap easier to hit.
 
 ---
 
-## 3. Deferred: `core:webhook`
+## 3. BUG (shipped): `core:send-email`'s rate limit is wrong in four ways
+
+**This is not a decision — it is a live defect in merged code**
+(`core/server/automation/actions_email.go`, tinycld #195). It is listed here
+because the right shape of the fix depends on decision #2, so correcting it
+and settling that decision should happen together.
+
+It was written by copying mail's rate limiter *before* mail corrected its
+own (`f17ee11`, "make the rule send cap bound sends, not matched runs"). That
+commit's message enumerates why counting `rule_runs` is wrong; `core:send-email`
+still counts `rule_runs`.
+
+**The four flaws, in severity order:**
+
+1. **Fails OPEN on a count error.** On a query failure it logs and allows the
+   send. This is backwards, and the reasoning in the code comment — "core has
+   no self-send to verify, so blocking legitimate mail is the worse outcome" —
+   is wrong. This cap is the *only* control bounding a cross-dispatch mail
+   loop: the engine's depth cap cannot see a hop through an external
+   autoresponder, because the reply returns as genuinely new inbound mail at
+   depth 0. If the count is unavailable we cannot know we are not mid-loop.
+   An unbounded auto-reply exchange is worse than a skipped send recorded in
+   run history. **Must fail closed.**
+
+2. **Counts matched runs, not sends.** A rule with three `send-email` actions
+   writes one `rule_runs` row but emits three messages, so the effective
+   ceiling is `len(sendActions) × 20`, not 20.
+
+3. **Off by one.** `WriteRun` is called *after* the whole action loop
+   (`engine.go`), so the in-flight run is never in its own count.
+
+4. **Prunable out from under itself.** `pruneRuns` keeps only
+   `keepRunsPerRule` (200) rows per rule. Less severe than in mail's case
+   because 200 ≫ 20, but the counter is still built on rows another mechanism
+   is free to delete.
+
+**Why the fix is not just "copy mail's".** Mail counts `mail_messages` — the
+same rows its sent folder reads. Core has no outbox, which is the genuine
+asymmetry, so it needs a different counter: its own table, or a bounded
+in-memory ledger, plus fail-closed semantics.
+
+**Interaction with decision #2.** If native handlers gain an explicit
+authorization/metering seam (option 2 there), this counter is a natural thing
+to hang off it rather than re-implement per action. If not, core needs its own
+standalone counter. Deciding #2 first avoids building the wrong one.
+
+---
+
+## 4. Deferred: `core:webhook`
 
 Not built. It is new outbound-HTTP capability with no precedent in core, so it
 needs SSRF guards — lift `validateICSURL` / `isDisallowedIP` out of
