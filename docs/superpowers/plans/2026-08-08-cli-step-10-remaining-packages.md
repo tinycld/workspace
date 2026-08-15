@@ -31,6 +31,22 @@ Also shipped after the spec was written, and load-bearing here: the federated
 search aggregator (`core/server/search/`) and `tinycld search`
 (`docs/superpowers/plans/2026-08-07-cross-package-search-palette.md`).
 
+**A FIFTH package group shipped a CLI after this plan was written and is not in
+any task list below: `cards`** (`cards/cli/` — board/card/list commands, a `cli`
+manifest block, `cards/help/command-line.md`, scope entries in the middleware).
+It is the most recent worked example of the whole pattern — prefer it over
+`mail`/`drive` when copying. So the remaining work is FOUR packages, not five,
+and Task 10's smoke test below has now been done for the four groups that ship
+today (`search`, `drive`, `mail`, `cards`).
+
+Task 1's premise has also already been satisfied twice over: the stale
+`GET /api/contacts/search` entry the plan asks Task 4 to delete is **already
+gone** from `oauth/middleware.go`, and the Task 3 scope entries
+(`GET /api/contacts/export`, `POST /api/contacts/import`) are **already in the
+table** — ahead of the Task 2 endpoints they guard, which do not exist yet
+(`contacts/server/register.go` binds no HTTP routes). Re-audit before starting;
+do not assume the task order below still matches the tree.
+
 ## Two places the spec is wrong
 
 **1. `contacts search` has no package route.** The spec says
@@ -319,15 +335,41 @@ calc new <name> | comments <path>
 **This is the task that has never been done for ANY CLI command**, including
 the shipped `search`, `mail`, and `drive` groups. Every test to date runs
 against a fake HTTP server. The contract structs in `cli/` are hand-mirrored
-from server types (the module boundary forbids importing them), so a field-name
-drift compiles cleanly and fails only at runtime.
+from server types (the module boundary keeps them out of reach — see
+`gen-cli.ts`), so a field-name drift compiles cleanly and fails only at runtime.
 
-- [ ] **Step 1: Boot a real server** — `cd tinycld && pnpm run dev`
-- [ ] **Step 2: `tinycld auth login localhost:<port>`**
-- [ ] **Step 3: Exercise every group against real data** — at minimum
-  `search`, `contacts list/search/export`, `drive ls`, `mail search`. Record
-  anything that differs from the fake-server behavior.
-- [ ] **Step 4: Fix whatever drifted** (expect at least one field-name mismatch)
+- [x] **Step 1: Boot a real server** — `cd tinycld && pnpm run dev`
+      (API is on **7101**, not 8090 — the spec was wrong; now corrected.)
+- [x] **Step 2: `tinycld auth login localhost:7101`** — works. Approval is
+      `POST /oauth/authorize/approve` with a **form-encoded** body, not
+      `POST /oauth/authorize` (that one is Zapier's and answers
+      "Unknown client_id").
+- [x] **Step 3: Exercise every SHIPPED group against real data** — `search`,
+      `drive` (ls/tree/search/usage/put/get/rm), `mail` (list/search/mailboxes),
+      `cards` (board list/view, card view), `--json`. `drive put` → `drive get`
+      round-trips byte-identical. `contacts` was not exercised: it ships no CLI
+      (that is Tasks 2–4, still not started).
+- [x] **Step 4: Fix whatever drifted** — three real bugs, none of them the
+      predicted field-name mismatch:
+  1. **`mail_domains` unclassified in the OAuth scope table** → default-deny
+     403 broke `mail send`, `mail mailboxes`, and `--mailbox <address>`. The
+     stored address is only a local part, so every full address joins that row.
+     Fixed read-only + test.
+  2. **`cards:*` missing from `cliScopes` AND the seed migration** → `tinycld
+     cards` 403'd everywhere, and `tinycld search` silently omitted cards
+     results (the aggregator narrows to covered scopes rather than erroring).
+     Fixed in both, plus an APPENDED migration to widen already-provisioned
+     databases.
+  3. **`cards board view PL` said "not found"** though `board list` prints `PL`
+     under a column headed KEY. `resolveProject` matched ids and names only.
+     Fixed (key ordered before names) + 2 tests. The fixture never set `Slug`,
+     so the fake server shared the resolver's blind spot.
+
+  **The lesson for the four remaining packages:** the predicted failure mode
+  (mirrored-struct field drift) did not appear. What did was the *scope plumbing*
+  — three of four bugs were a collection or scope missing from a hand-maintained
+  list, invisible to a fake server that has no scope layer at all. Tasks 3 and 7
+  are the highest-risk steps in this plan, not the boilerplate they look like.
 - [ ] **Step 5: Help topics** — `contacts/help/command-line.md` and
   `calendar/help/command-line.md`, following `drive/help/command-line.md`.
   Cross-link from `core/help/command-line.md`'s "Package commands" section.
