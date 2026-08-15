@@ -224,6 +224,25 @@ route no scope covers is refused for OAuth-authenticated requests. The CLI
 requests broad scopes; Zapier requests narrow ones and the consent screen shows
 exactly what is being granted.
 
+**Adding a package's scopes means editing FOUR places, and nothing enforces
+that they agree.** The `cli` manifest block is metadata; it does not feed any
+of them:
+
+| Place | Effect if it is missed |
+|---|---|
+| `oauth.AllScopes` + the scope constants | the scope is not a valid string at all |
+| `collectionScopes` / the route table | default-deny 403s the collection |
+| the seed migration's client `scopes` | the CEILING rejects the login outright |
+| `cliScopes` in `cli/auth.go` | the grant is issued WITHOUT the scope; commands 403 later |
+
+The cards package shipped with the first two done and the last two missed, so
+`tinycld cards` 403'd on every deployment and `tinycld search` silently dropped
+cards results — the aggregator narrows itself to the scopes a grant covers, so
+an under-scoped grant under-reports rather than erroring. When adding a
+package, change all four, and remember the seed migration is frozen once
+released: widen an existing deployment with an APPENDED migration, never an
+edit (PocketBase never re-runs an applied file).
+
 ### Device flow (the CLI)
 
 ```
@@ -239,8 +258,14 @@ $ tinycld auth login acme.tinycld.org
 1. `POST /oauth/device` → `{device_code, user_code, verification_uri, interval, expires_in}`
 2. CLI opens the browser and polls `POST /oauth/token` at `interval`, honoring
    `authorization_pending` / `slow_down` per RFC 8628
-3. User approves at `/oauth/authorize?user_code=…` in the already-logged-in web
-   app, names the device, sees the scopes
+3. User approves in the already-logged-in web app, names the device, sees the
+   scopes. `GET /oauth/authorize?user_code=…` is the consent SCREEN; the
+   approval itself is `POST /oauth/authorize/approve` (deny is
+   `/oauth/authorize/deny`), and it reads a **form-encoded** body — a JSON post
+   yields an empty `user_code` and a misleading "That code is not valid".
+   Bare `POST /oauth/authorize` is the authorization-code endpoint in Part 9
+   and requires a `client_id`; posting a `user_code` there fails with
+   "Unknown client_id".
 4. Poll returns the access token once; CLI stores it in the OS keychain
    (Keychain / Credential Manager / libsecret), falling back to
    `~/.config/tinycld/` at mode 0600 with a warning
@@ -716,11 +741,15 @@ calc new <name> | comments <path>
 
 ## Verification
 
+`pnpm run dev` serves PocketBase on **7101** (Expo on 7102, proxy on 7100) —
+not 8090. Confirm with `grep 'Server started'` on the dev output before
+assuming a port.
+
 ```sh
 # OAuth metadata + device flow against a dev server
 cd ~/code/tinycld/tinycld && pnpm run dev
-curl -s localhost:8090/.well-known/oauth-authorization-server | jq
-curl -s -X POST localhost:8090/oauth/device -d 'client_id=tinycld-cli&scope=drive:read' | jq
+curl -s localhost:7101/.well-known/oauth-authorization-server | jq
+curl -s -X POST localhost:7101/oauth/device -d 'client_id=tinycld-cli&scope=drive:read' | jq
 
 # Generator emits the extension file for the installed package set
 pnpm run packages:generate
@@ -732,7 +761,7 @@ GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o /tmp/tinycld.exe .
 GOOS=linux   GOARCH=arm64 CGO_ENABLED=0 go build -o /tmp/tinycld-linux .
 
 # End to end
-/tmp/tinycld auth login localhost:8090
+/tmp/tinycld auth login localhost:7101
 /tmp/tinycld drive put ./README.md /
 /tmp/tinycld drive ls --json
 /tmp/tinycld drive get /README.md /tmp/rt.md && diff README.md /tmp/rt.md

@@ -2,6 +2,8 @@
 
 This directory (`~/code/tinycld/`) **is** the pnpm-workspace root. It is assembled per-developer by `@tinycld/bootstrap`, so each root reflects only the members that developer chose, and `pnpm-lock.yaml` is local state. Every member dir is its own independent git repo with its own remote. Third-party packages (e.g. `@acme/custom-pkg`) are first-class — nothing privileges `@tinycld/*`.
 
+TinyCld fully supports both native and web.  All features should be written to support both platforms.  Only add web or native only features after fully informatig the user of drawbacks and getting the change signed-off 
+
 ## Layout & the repos you edit
 
 ```
