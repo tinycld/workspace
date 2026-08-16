@@ -1,4 +1,13 @@
-# CLI smoke test — Task 10, steps 1–4 (and 6)
+# CLI smoke test — Task 10
+
+> **Two rounds.** Round 1 (below) is DONE and covered `search`, `drive`,
+> `mail`, `cards`. **Round 2 (bottom of this file) has NOT been run** and
+> covers `contacts`, `calendar`, `text`, `calc`. Skip to it if that is what
+> you are here for — but read round 1's findings first, because its lesson
+> (weight the scope layer, not struct drift) is what round 2 is designed
+> around.
+
+# Round 1 — steps 1–4 (and 6), DONE
 
 Live server: `pnpm run dev`, PocketBase API on **127.0.0.1:7101**, Expo 7102,
 proxy 7100. Existing dev DB, never reset or reseeded. Authenticated with the
@@ -117,3 +126,124 @@ output. **`drive put` → `drive get` round-trips byte-identical** (`diff` clean
   level DevTools shows`). Deliberate `__DEV__`-guarded instrumentation for the
   in-flight editor-cost investigation (`HANDOFF-editor-webview-cost.md`). Left
   alone as out of scope — flagging rather than touching active work.
+
+---
+
+# Round 2 — the four groups added 2026-08-15/16 (NOT YET RUN)
+
+**Nothing below has touched a real server.** Round 1 above covered `search`,
+`drive`, `mail`, and `cards`. Four groups have shipped since and are still
+fake-server-only:
+
+| Group | Commands | PR |
+|---|---|---|
+| `contacts` | list, search, show, add, edit, rm, export, import | contacts#31 |
+| `calendar` | agenda, list, events, show, add, rm, rsvp, export, import | calendar#34 |
+| `text` | comments (`--add/--reply-to/--quote/--resolve/--reopen/--all`) | text#55 |
+| `calc` | comments (`--cell/--sheet/--add/--reply-to/--resolve/--reopen/--all`) | calc#56 |
+
+**Merge the scope PRs first or every command 403s:** tinycld#202 before
+calendar#34; tinycld#204 before text#55 and calc#56. Both add route/collection
+entries without which the middleware default-denies. tinycld#201 (help +
+lint) is independent.
+
+## Setup (unchanged from round 1, repeated so this section stands alone)
+
+```sh
+cd tinycld && pnpm run dev          # API 127.0.0.1:7101, Expo 7102, proxy 7100
+tinycld auth login localhost:7101   # device grant; approve in the browser
+```
+
+Do NOT reset or reseed the DB. **`auth login` must be re-run after merging the
+scope PRs** — a grant is issued with the scopes that existed when it was
+minted, so an existing token will not carry `text:*` / `calc:*` no matter what
+the server now advertises. That is itself worth confirming: an old token
+should fail with a scope error, not a confusing 404.
+
+## What to exercise
+
+```sh
+# contacts — the round-trip is the point
+tinycld contacts add --first Ada --last Lovelace --email ada@example.com
+tinycld contacts list ; tinycld contacts search ada ; tinycld contacts show <id>
+tinycld contacts edit <id> --phone 555-0100 ; tinycld contacts edit <id> --phone ""
+tinycld contacts export --out /tmp/a.vcf
+tinycld contacts import /tmp/a.vcf          # MUST report updated, not created
+tinycld contacts rm <id> ; tinycld contacts list --trashed
+tinycld contacts edit <id> --restore ; tinycld contacts rm <id> --permanent --yes
+
+# calendar
+tinycld calendar list                        # ROLE column populated?
+tinycld calendar agenda ; tinycld calendar agenda --days 30 --calendar <name>
+tinycld calendar events --from 2026-08-01 --to 2026-09-01
+tinycld calendar add --calendar <name> --title Standup --start "2026-08-20 09:30"
+tinycld calendar add --calendar <name> --title Offsite --start 2026-09-01 --all-day
+tinycld calendar show <id> ; tinycld calendar rsvp <id> yes
+tinycld calendar export --calendar <name> --out /tmp/c.ics
+tinycld calendar import --calendar <name> /tmp/c.ics   # MUST report updated
+tinycld calendar rm <id> --yes
+
+# text / calc — need a document and a workbook in Drive first
+tinycld drive put notes.md / ; tinycld drive put budget.xlsx /
+tinycld text comments /notes.md --add "First note"
+tinycld text comments /notes.md --add "Reply" --reply-to <id>
+tinycld text comments /notes.md --resolve <id> ; tinycld text comments /notes.md --all
+tinycld calc comments /budget.xlsx --cell B7 --add "This looks off"
+tinycld calc comments /budget.xlsx            # CELL column must read B7, not 6/1
+
+# and --json on at least one command per group
+```
+
+## Specific things to check, and why
+
+Round 1's lesson was that the *predicted* failure (mirrored-struct field drift)
+never appeared, while three of four real bugs were scope plumbing invisible to
+a fake server. Round 2 already added two more in that same category, both found
+by reading the plumbing rather than by any test (`text_comments`/`calc_comments`
+unclassified; cards consent labels missing). So weight the scope layer again.
+
+1. **The scope layer, first.** Every new group's collections and routes were
+   hand-added to `middleware.go`. `contacts` and `calendar` also have raw
+   routes (`/api/{contacts,calendar}/{export,import}`) whose entries are the
+   ONLY thing between a read grant and a write one — collection rules do not
+   run on raw routes at all.
+
+2. **Calendar's viewer/editor split — the biggest fake-server blind spot.**
+   Read is membership in any role; write is owner-or-editor. The server tests
+   pin the server side (`calendar/server/ics_endpoints_test.go`), but *what a
+   viewer actually sees* when a write is refused has never been observed. Get a
+   second account as a `viewer` on a calendar and run `calendar add` and
+   `calendar import` as them. Expect a comprehensible refusal, not a raw 403
+   body or a confusing 404. The CLI itself enforces nothing here by design —
+   `calendar list`'s ROLE column is the only forewarning a user gets.
+
+3. **The import upsert, on both file formats.** Export then immediately
+   re-import must report `updated`, never `created`. Both had the identical
+   latent defect (globally-unique UID index vs. per-book/per-calendar UID
+   semantics), fixed by regenerating the UID on cross-owner collision. Only a
+   real DB with a real unique index proves it.
+
+4. **`contacts rm` is a SOFT delete** — confirm the row lands in
+   `list --trashed` and `edit --restore` brings it back. `--permanent` is the
+   only hard delete.
+
+5. **`calc`'s A1 conversion at a real boundary.** The CELL column must render
+   `B7`, never the stored `6`/`1`. Try a two-letter column (`AA1`) against a
+   workbook the app also has open, and confirm the app agrees about which cell
+   is annotated. This is the one place round 2 introduced a genuinely new
+   representation.
+
+6. **The consent screen**, since tinycld#204 changes it: `auth login` should
+   now list plain-language lines for cards/text/calc rather than raw
+   `cards:write` strings.
+
+## Known gaps this run should close
+
+- No group has been exercised against a DB with more than one user, so nothing
+  cross-account has been observed anywhere — including contacts' owner scoping,
+  which the server tests cover but the CLI has never provoked.
+- `calendar rsvp` refuses when the caller is not on the guest list. That path
+  is fake-tested; the real one depends on the caller's account email matching a
+  guest entry, which no test has ever done with a real address.
+- Round 1's two cosmetic items (the contradictory keychain warning, raw ids in
+  `cards card view`) are still open and still want your call.
