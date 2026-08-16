@@ -35,6 +35,7 @@ grant through the same standard endpoints.
 | Command code location | Each package's own repo, via a new `cli` manifest block (mirrors `server`) |
 | Implementation | Go; commands are HTTP clients — the binary runs on the user's laptop and has no DB access |
 | Signing | Unsigned in v1; Gatekeeper/SmartScreen bypass documented |
+| Automation access | `tinycld rules` core command group over the existing automation endpoints; the actions catalog is NOT auto-exposed as commands (rejected — see Part 6) |
 
 ### Scope: this is three deliverables, not one
 
@@ -215,8 +216,13 @@ installed:
 ```
 mail:read  mail:send  drive:read  drive:write
 contacts:read  contacts:write  calendar:read  calendar:write
+rules:read  rules:write
 profile
 ```
+
+(`rules:*` covers the core automation engine — a core capability, not a
+package, but named the same way. See the `tinycld rules` group in Part 6 for
+what each grants and two deliberate scope placements.)
 
 Scope→route enforcement is a table in the core middleware, with each package
 declaring the scopes it defines in its `cli` manifest block. Default deny: a
@@ -616,12 +622,95 @@ Core commands, compiled into every build:
 ```
 tinycld auth login <host> | logout | status
 tinycld context list | use | add | remove
+tinycld rules …                                   # see below — also core
 tinycld version
 tinycld completion bash|zsh|fish|powershell
 ```
 
 Global flags: `--json` / `--output table|json|csv`, `--context <name>`,
 `--quiet`, `--no-color`, `--yes`.
+
+### rules
+
+Core commands, like `auth`/`context`: the automation engine registers in
+`registerSharedCore`, so every deployment has it and the group compiles into
+every build. Code lives in `tinycld/cli` itself — no `cli` manifest block, no
+generation.
+
+```
+rules list            --scope personal|org      # PB REST on `rules`
+rules runs <id>       --limit 20                # PB REST on `rule_runs`
+rules enable|disable <id>                       # PATCH `rules`.enabled
+rules run <id>                                  # POST /api/automation/rules/{id}/run
+rules test <id>                                 # POST /api/automation/dry-run
+```
+
+Facts the implementation must respect:
+
+- **`rules run` accepts only `core:manual` / `core:schedule` rules** —
+  `validateManualRun` rejects record-event triggers ("only manual/scheduled
+  rules can be run directly") and requires owner-or-admin. The endpoint
+  returns `{queued: true}` and execution is async through the worker pool:
+  the command reports queued and points at `rules runs <id>` — it must not
+  pretend to wait for a result.
+- **`rules test <id>` has no server-side by-id form.** The dry-run endpoint's
+  body is `{trigger, conditions}`; the CLI reads the saved rule record and
+  submits those two fields, then renders the per-record matches (the caller's
+  most recent 50 records of the trigger collection).
+- **`list`/`enable`/`disable` ride the `rules` collection rules unchanged** —
+  owner for personal, admin for org, and the update rule is body-locked
+  against `scope`/`owner` escalation, so a plain PATCH of `enabled` is exactly
+  what the collection already permits. `rule_runs` is never client-writable,
+  and its visibility (owner for personal rules, admins only for org rules)
+  already matches what the CLI should print — no CLI-side filtering.
+
+**Scopes:** `rules:read` covers `list` and `runs`; `rules:write` covers
+`enable`/`disable`, `run`, and `test`. Two placements are deliberate:
+
+- **Dry-run requires `rules:write`, not `rules:read`.** Its response carries
+  per-record field summaries from the trigger collection, so a `rules:read`
+  token could otherwise read mail/contacts/… data it holds no scope for.
+  Implementation: `collectionScopes` entries for `rules` (read/write) and
+  `rule_runs` (read-only), an exact `endpointScopes` entry for
+  `POST /api/automation/dry-run`, and an `endpointPrefixScopes` entry
+  `POST /api/automation/rules/` for the id-carrying run route.
+- **The `rules:write` consent copy must say "run your automation rules."**
+  A rule's actions execute with the rule's own authority (personal rules as
+  their owner, org rules as system) — NOT bounded by the token's other
+  scopes, so running a rule that sends mail needs no `mail:send`. That is by
+  design (the user authored the rule with full authority in the app; the
+  token only pulls a trigger the app already exposes as a button), but the
+  consent screen has to state it rather than let "rules" read as metadata-only.
+
+Adding these two scopes means the FOUR-place checklist above applies:
+`ScopeRulesRead`/`ScopeRulesWrite` + `AllScopes`; the collection/endpoint
+tables; the seeded CLI client's `scopes` ceiling — deployments with the seed
+already applied get widened by an **appended** migration, never an edit; and
+`cliScopes` in `cli/auth.go`. Missing either of the last two reproduces the
+cards failure mode (403 on every command / silently under-scoped grant).
+
+**Rejected: auto-deriving commands from the automation actions catalog.**
+Considered and rejected — the actions contract assumes the engine is the
+caller, and breaks in three ways when invoked directly:
+
+1. Native handlers receive a **superuser `core.App` and are not
+   pkgaccess-gated** (`registry.go` requires them to self-enforce, under
+   engine assumptions). Outside a rule the context degenerates —
+   `ActionRequest.Rule` is nil, so e.g. `core:send-email`'s per-rule hourly
+   rate limit never engages. A direct-invoke endpoint is an unmetered,
+   superuser-context mailer for any token, and every third-party package's
+   handler would silently inherit the widened threat model.
+2. Record-op actions target `trigger-record`, which does not exist outside
+   the engine; with a `--record` flag they collapse into plain record
+   updates the curated commands and PB REST already do better.
+3. Action params are builder scalars (no files, no lists — `core:send-email`
+   takes exactly one recipient), so derived commands would sit beside the
+   curated surface as strictly weaker duplicates (`invoke send-email` next to
+   `mail send --attach`).
+
+A package wanting one operation on both surfaces shares a server-side service
+function called from both the action handler and an HTTP endpoint, each
+wrapper enforcing its own context's guards.
 
 ### mail
 
@@ -732,6 +821,11 @@ calc new <name> | comments <path>
   rendering, error paths.
 - **Path resolution**: table-driven drive path↔id tests including the cycle
   guard and the `''` root.
+- **rules group**: `run` on a record-event rule surfaces the server's
+  rejection; `test` round-trips a saved rule's `{trigger, conditions}`
+  through dry-run; a `rules:read`-only grant 403s on `run` and `test` (the
+  dry-run data-exposure placement is the point under test); `run` output
+  reports queued rather than claiming completion.
 - **Integration**: one test booting the real binary — `auth login`,
   `drive put`, `drive ls`, `drive get`, diffing round-tripped bytes.
 - **Non-TTY**: `--json` is stable and no prompt blocks when stdin is not a
@@ -807,11 +901,16 @@ Settings → About offers the correct platform binary.
 9. **Authorization Code + PKCE** — completes the AS for Zapier; register Zapier
    as a confidential client.
 10. **contacts / calendar / text / calc** — repeat the pattern.
+11. **`tinycld rules` group** — the two `rules:*` scopes across all four
+    registration points (client-seed widening as an appended migration),
+    then the core commands and their tests.
 
 Steps 1–4 are sequential. Step 5 can run alongside 3–4 (it touches the server
 and web client, not the CLI) but **must land before 6 and 7**, so package
 commands are written against generated types rather than hand-copied shapes.
 6 and 7 then parallelize. Step 9 is independent of the CLI once 1 lands.
+Step 11 needs only 1–3 (it uses core endpoints and PB REST, no generated
+types) and can land any time after them.
 
 ## Out of scope
 

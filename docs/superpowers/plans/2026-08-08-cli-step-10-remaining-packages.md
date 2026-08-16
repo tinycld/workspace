@@ -104,14 +104,26 @@ proven reachable from `contacts/server`.
 | 1 | Export the carddav codec | **done** (`c75c610`) |
 | 2–3 | contacts export/import endpoints + scopes | **done** (`c33ec73`; 3 was already shipped) |
 | 4 | contacts CLI (8 commands) | **done** — see below |
-| 5 | Export the caldav codec | — |
-| 6–7 | calendar ICS endpoints + scopes | 5 |
-| 8 | calendar CLI | 6–7 merged |
-| 9 | text + calc CLI | — (independent) |
-| 10 | Live smoke test + help topics | everything |
+| 5 | Export the caldav codec | **not needed** — already exported as `EncodeVEvent`/`ApplyVEvent` |
+| 6–7 | calendar ICS endpoints + scopes | **done** (calendar#34, core#202) |
+| 8 | calendar CLI | **done** (calendar#34) |
+| 9 | text + calc CLI | **done** (text#55, calc#56) — NOT independent: needed new scopes (core#204) |
+| 10 | Live smoke test + help topics | help topics **done**; **live smoke test still owed** |
 
-Tasks 5–8 mirror 1–4 exactly. Task 9 is independent of both and is the
-cheapest; do it first if you want something shippable early.
+~~Tasks 5–8 mirror 1–4 exactly. Task 9 is independent of both and is the
+cheapest; do it first if you want something shippable early.~~
+
+**Both halves of that turned out wrong, and the corrections are the most
+useful thing in this document:**
+
+- **Tasks 5–8 did NOT mirror 1–4.** Task 5 was unnecessary (the codec was
+  already exported under other names), and calendar's authorization is
+  two-tiered (read = membership in any role, write = owner-or-editor) where
+  contacts has a single `owner` field. The contacts endpoints are not a
+  template for the calendar write path.
+- **Task 9 was NOT independent, and not the cheapest.** It was the only task
+  requiring new public scope vocabulary (`text:*`, `calc:*`), across four
+  hand-maintained lists plus an appended migration.
 
 ---
 
@@ -316,16 +328,22 @@ which had drifted — it named only drive and mail, missing `cards` entirely.
 **Files:**
 - Modify: `tinycld/core/server/caldav/ical_codec.go` (+ call sites, tests)
 
-Identical to Task 1: `recordToCalendar` → `RecordToCalendar`,
-`applyCalendarToRecord` → `ApplyCalendarToRecord`. Behavior unchanged; the
-rename is the whole diff.
+**NOT NEEDED — the work is already done, differently and better.** Audited,
+not assumed: `ical_codec.go` already ships EXPORTED wrappers over the two
+unexported functions — `EncodeVEvent` (→ `recordToCalendar`) and `ApplyVEvent`
+(→ `applyCalendarToRecord`), plus `RecurrenceToRRule` / `RRuleToRecurrence` —
+under a header explaining that a package ingesting iCalendar outside the
+protocol path needs exactly this. That is the same reachability the rename
+would buy, without touching the unexported implementations or their call
+sites, so performing the rename now would be pure churn against a file that
+already solved the problem.
 
-- [ ] **Step 1: Baseline** — `go test ./caldav/ -count=1` PASSES first
-- [ ] **Step 2: Rename definitions + all call sites**
-- [ ] **Step 3: Verify** — `go build ./... && go vet ./caldav/ && go test ./caldav/ -count=1`
-- [ ] **Step 4: Prove reachability from `calendar/server`** (a throwaway test
-  referencing both symbols; delete it after)
-- [ ] **Step 5: Commit**
+Reachability from `calendar/server` (the real requirement behind Step 4) is
+structural: it already imports `tinycld.org/core/caldav` for `calDAVSource`.
+
+**Consequence for the sequencing table: Task 6 no longer depends on Task 5,
+and no core PR is needed before the calendar member work.** Use
+`caldav.EncodeVEvent` / `caldav.ApplyVEvent`; do NOT re-export or rename.
 
 ---
 
@@ -334,12 +352,49 @@ rename is the whole diff.
 Mirrors Task 2. `GET /api/calendar/export?calendar=<id>` → `text/calendar`,
 `POST /api/calendar/import`.
 
-**Open question to settle before implementing:** calendar events are scoped by
-calendar membership, not a single `owner` field — check
-`calendar/server/register.go`'s caldav Source `ListFilter` and mirror it
-exactly rather than assuming per-user.
+**Open question — SETTLED. The answer is not what the question assumed.**
 
-- [ ] **Step 1: Read the caldav Source and record the real scope rule here**
+`calDAVSource` has **no `ListFilter` at all** (contacts has one; calendar does
+not). Its header says so deliberately: "There are no permission callbacks here
+on purpose. Authorization comes from the calendar_calendars /
+calendar_events access rules the migrations ship, which core evaluates with
+`app.CanAccessRecord` — one definition, shared by the REST API, the web UI,
+and this protocol path."
+
+So there is nothing to mirror, and the contacts pattern (copy `ListFilter`
+into a raw route) **cannot be reused here**. The authoritative rule is
+migration `1830000004`:
+
+```
+enabled   = @request.auth.disabled != true
+viaMember = calendar.calendar_members_via_calendar.user ?= @request.auth.id
+viaWriter = calendar.calendar_members_via_calendar.user ?= @request.auth.id &&
+            (…role ?= "owner" || …role ?= "editor")
+
+calendar_events  list/view = enabled && viaMember
+                 create/update/delete = enabled && viaWriter
+```
+
+Read access is **membership**, write access is **owner-or-editor** — a
+distinction contacts does not have, and the one a hand-written filter is most
+likely to get wrong (note the migration's own warning about `?!= "viewer"`
+silently granting write to every future role).
+
+**Implementation consequence:** do NOT hand-write a membership filter in the
+export handler. Two options, in order of preference:
+
+1. **Reuse the rule engine.** Read the caller's events through the same path
+   the REST API uses so `CanAccessRecord` runs, rather than re-deriving
+   authorization in Go. A second copy of a membership predicate is exactly
+   the drift this Source's header exists to prevent.
+2. If a raw filter is unavoidable, derive the calendar id set from
+   `calendar_members` for the caller FIRST, then filter events by
+   `calendar IN (...)` — never inline a back-relation predicate by hand.
+
+Import additionally needs the **writer** check (owner/editor), not merely
+membership: a viewer must not be able to POST events into a calendar.
+
+- [x] **Step 1: Read the caldav Source and record the real scope rule here**
 - [ ] **Step 2: Failing test** (same coverage list as Task 2, plus: an event on
   a calendar the caller is not a member of must not export)
 - [ ] **Step 3: Implement**
@@ -374,7 +429,25 @@ calendar export [--ics] [--out FILE] | import <file.ics>
 a Huh form. Defer that — every shipped command is flag-driven and non-interactive,
 and `--yes` exists precisely so commands run in CI. Add the form only if asked.
 
-- [ ] Steps mirror Task 4.
+- [x] Steps mirror Task 4.
+
+**DONE** — nine commands, 27 tests. Three notes:
+
+1. **The two-tier access model is surfaced, not hidden.** Read is membership
+   in any role; write is owner-or-editor. `calendar list` shows the caller's
+   ROLE per calendar so a viewer learns it from a column rather than from a
+   failed `add`, and both write commands say so in their help.
+2. **`agenda` and `events` stayed separate.** A relative window from now is a
+   different question from an explicit range; collapsing them makes both
+   harder to type. `agenda` starts at now rather than midnight, so a meeting
+   that already finished today does not lead the list.
+3. **`rsvp` refuses when the caller is not on the guest list** rather than
+   adding them — that would be a different action from answering an
+   invitation. The guest list is a JSON column, so this is a read-modify-write
+   with the same lost-update window the app has (noted in the code).
+
+The Huh-form deferral above still stands: every shipped command is
+flag-driven.
 
 ---
 
@@ -389,7 +462,42 @@ text new <name> | cat <path> | comments <path> [add|resolve]
 calc new <name> | comments <path>
 ```
 
-- [ ] Steps mirror Task 4, minus the export/import work.
+- [x] Steps mirror Task 4, minus the export/import work.
+
+**DONE**, with the surface deliberately narrowed and the "independent" claim
+found to be false.
+
+**1. `new` and `cat` were dropped** (decided with the user, not unilaterally).
+A document is a `drive_item`, so `drive put` already creates one with a mime
+type and `drive cat` / `drive get` already read it. A `text new` would be a
+second code path creating drive items, duplicating what `drive/cli` owns and
+tests. And a document body is a Yjs CRDT edited collaboratively — there is no
+shell write that would not clobber concurrent edits. The shipped surface is
+`text comments <path>` and `calc comments <path>`, each with
+`--add / --reply-to / --resolve / --reopen / --all`. Both `register.go` files
+state the reasoning so nobody "completes" the group by mistake.
+
+**2. Task 9 was NOT independent — it was the only task needing new public
+scope vocabulary.** `text:*` and `calc:*` did not exist; `text_comments` and
+`calc_comments` were absent from the scope table, so every request
+default-denied. Four hand-maintained lists had to move together (`AllScopes`,
+the collection table, `cliScopes`, the seeded client row via an APPENDED
+migration `2000000002`, following `2000000001`'s precedent).
+
+**3. A pre-existing consent-screen bug surfaced while doing it.** `ScopeList`
+renders `SCOPE_LABELS[scope] ?? scope`, and `cards:read` / `cards:write`
+shipped with no labels — so the consent screen has literally been asking users
+to approve "cards:write" since cards launched. Labels added for cards, text,
+and calc, plus a test that parses the Go catalog and fails when the two drift.
+
+**4. calc's distinctive piece is A1 notation.** A calc comment anchors to a
+cell (`sheet_id`, `row`, `col`) rather than to quoted prose. The CLI speaks A1
+because that is what the app shows; `cell.go` converts at the edge (bijective
+base-26, case-insensitive) so no other layer holds two representations.
+
+Path resolution is duplicated from `drive/cli` in both packages rather than
+shared: siblings must not depend on each other, and putting drive's path model
+into core for two callers is worse than the duplication.
 
 ---
 
@@ -433,11 +541,12 @@ from server types (the module boundary keeps them out of reach — see
   — three of four bugs were a collection or scope missing from a hand-maintained
   list, invisible to a fake server that has no scope layer at all. Tasks 3 and 7
   are the highest-risk steps in this plan, not the boilerplate they look like.
-- [ ] **Step 5: Help topics** — `contacts/help/command-line.md` **done** (with
-  Task 4, not deferred); `calendar/help/command-line.md` still owed, following
-  `drive/help/command-line.md`. Core's "Package commands" section is now a
-  list and already links contacts — it had also been missing `cards` entirely,
-  fixed in the same pass. Add calendar there when Task 8 lands.
+- [x] **Step 5: Help topics** — DONE for all four:
+  `contacts/help/command-line.md`, `calendar/help/command-line.md`,
+  `text/help/command-line.md`, `calc/help/command-line.md`. Core's "Package
+  commands" section is now a list linking all six groups — it had been naming
+  only drive and mail, missing `cards` entirely (fixed in the same pass,
+  tinycld#201).
 - [ ] **Step 6: Full gate**
 
 ```sh
@@ -468,3 +577,37 @@ optional polish.
 first, members after. Task 4 additionally touches `tinycld` (the stale
 middleware entry) — that can ride in the Task 3 PR instead if you prefer one
 core PR.
+
+---
+
+## Where this stands (end of the autonomous pass)
+
+Every task in this plan is complete except **Task 10 Step 4's live smoke
+test**, which is the one thing that cannot be done from a fake server and is
+therefore the highest-value remaining work. Six PRs are open:
+
+| PR | What | Merge order |
+|---|---|---|
+| tinycld#201 | help cross-links + editor complexity lint fix | any time |
+| tinycld#202 | calendar route→scope entries | **before** calendar#34 |
+| tinycld#204 | text/calc scopes + consent labels | **before** text#55 / calc#56 |
+| contacts#31 | vCard endpoints + contacts CLI | any time |
+| calendar#34 | ICS endpoints + calendar CLI | after tinycld#202 |
+| text#55, calc#56 | comment CLIs | after tinycld#204 |
+
+**The live smoke test is still owed for six groups**, and the plan's own
+lesson says why it matters: the predicted failure (mirrored-struct drift) has
+never once appeared, while THREE of the four bugs the first smoke test found
+were scope plumbing invisible to a fake server. This pass added two more data
+points in the same direction — `text_comments`/`calc_comments` unclassified,
+and the cards consent labels missing — both found by reading the scope
+plumbing rather than by any test. Run `tinycld contacts`, `calendar`, `text`,
+and `calc` against a real server before calling step 10 done.
+
+**One class of risk a fake server structurally cannot cover**, worth naming
+for whoever does that run: calendar's authorization is two-tiered (read =
+membership, write = owner-or-editor), and neither the CLI fake nor the CLI
+itself enforces it. The server tests pin it
+(`calendar/server/ics_endpoints_test.go`), but the CLI's behavior when the
+server says no — the error a viewer sees on `calendar add` — has never been
+observed.
