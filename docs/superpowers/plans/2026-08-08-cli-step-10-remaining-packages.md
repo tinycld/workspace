@@ -595,8 +595,10 @@ therefore the highest-value remaining work. Six PRs are open:
 | calendar#34 | ICS endpoints + calendar CLI | after tinycld#202 |
 | text#55, calc#56 | comment CLIs | after tinycld#204 |
 
-**The live smoke test is still owed for six groups**, and the plan's own
-lesson says why it matters: the predicted failure (mirrored-struct drift) has
+**The live smoke test is still owed for the four new groups.** The commands to
+run, the setup, and the specific hypotheses to test are written up in
+`HANDOFF-cli-smoke-test.md` → "Round 2" — start there rather than from this
+plan. The plan's own lesson says why it matters: the predicted failure (mirrored-struct drift) has
 never once appeared, while THREE of the four bugs the first smoke test found
 were scope plumbing invisible to a fake server. This pass added two more data
 points in the same direction — `text_comments`/`calc_comments` unclassified,
