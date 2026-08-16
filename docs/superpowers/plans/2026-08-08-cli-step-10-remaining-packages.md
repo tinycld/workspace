@@ -25,7 +25,7 @@ Audited against the tree, not assumed:
 | 7 mail commands | done (14 commands) |
 | 8 Build + distribution | done (`coreserver/cli_downloads.go`, About panel) |
 | 9 Auth Code + PKCE | done (`authorize.go`, `pkce.go`, 27 tests) |
-| **10 contacts/calendar/text/calc** | **not started — this plan** |
+| **10 contacts/calendar/text/calc** | **in progress — this plan** (contacts server done; CLI groups not started) |
 
 Also shipped after the spec was written, and load-bearing here: the federated
 search aggregator (`core/server/search/`) and `tinycld search`
@@ -102,7 +102,7 @@ proven reachable from `contacts/server`.
 | Tasks | What | Depends on |
 |---|---|---|
 | 1 | Export the carddav codec | **done** (`c75c610`) |
-| 2–3 | contacts export/import endpoints + scopes | 1 |
+| 2–3 | contacts export/import endpoints + scopes | **done** (`c33ec73`; 3 was already shipped) |
 | 4 | contacts CLI (8 commands) | 2–3 merged |
 | 5 | Export the caldav codec | — |
 | 6–7 | calendar ICS endpoints + scopes | 5 |
@@ -138,7 +138,28 @@ cheapest; do it first if you want something shippable early.
   reported, not fatal — but the response names what failed, so nothing is
   silently dropped.
 
-- [ ] **Step 1: Write the failing test**
+**DONE** (`c33ec73` in the `contacts` repo). Two things the round-trip needed
+that the plan did not anticipate, both found by the tests:
+
+1. **`cardDAVSource.VCard` set no `UIDField`**, so exported cards carried no
+   UID and a re-import duplicated everything. The field already existed for
+   exactly this case; contacts had simply never set it. Now set.
+2. **`idx_contacts_vcard_uid` is GLOBALLY unique** (migration 1712000002),
+   while vCard UIDs are only unique within an address book (RFC 6350). A card
+   whose UID another user already held failed the save outright — so whoever
+   imported a contact first permanently blocked everyone else from importing
+   it. Import now regenerates the UID on that collision.
+
+Also: `registerShared`'s `vcard_uid` create hook was extracted to a named
+`bindVCardUIDHook` so the endpoint tests bind the real hook rather than
+stamping UIDs by hand (a fixture that faked the UID would hide a regression in
+the identity the whole feature matches on).
+
+Note `go mod tidy` does not work in this workspace (it resolves the module
+graph before applying go.work's replace) — `go-vcard` was promoted to a direct
+require by hand, as `cards/server/go.mod`'s header documents.
+
+- [x] **Step 1: Write the failing test**
 
 Cover, at minimum:
 - export returns `text/vcard` and one VCARD block per contact
@@ -153,22 +174,22 @@ Model the app wiring on `drive/server/search_disabled_test.go` (hand-built
 minimal schema — raw SQL/route tests bypass the rule engine, so `rlstest` is
 the wrong tool).
 
-- [ ] **Step 2: Run the test, confirm it fails for the right reason**
+- [x] **Step 2: Run the test, confirm it fails for the right reason**
 
 `cd contacts/server && go test ./ -run VCard -count=1`
 Expected: FAIL — endpoints undefined. (Not a compile error in the test itself.)
 
-- [ ] **Step 3: Implement the endpoints**
+- [x] **Step 3: Implement the endpoints**
 
 Bind in the existing `OnServe` block beside the CardDAV mount, following
 `drive/server/register.go:129`'s shape. Both `Bind(apis.RequireAuth())`.
 Reuse `cardDAVSource.VCard` — never re-declare the field map.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 `cd contacts/server && go build ./... && go test ./... -count=1` → PASS
 
-- [ ] **Step 5: Commit** (`feat(contacts): export and import vCard files`)
+- [x] **Step 5: Commit** (`feat(contacts): export and import vCard files`)
 
 ---
 
@@ -181,17 +202,23 @@ Reuse `cardDAVSource.VCard` — never re-declare the field map.
 Without this, the Task 2 routes are reachable by any authenticated token
 regardless of grant — raw routes never run collection rules.
 
-- [ ] **Step 1: Add the failing test** — a `contacts:read`-only token may
+**ALREADY DONE** before this plan was picked up — re-audited, not assumed. Both
+entries are in the table (`middleware.go:158-159`) and `middleware_test.go:472`
+carries exactly the asymmetry test below: export is not satisfied by
+`contacts:write` alone, nor import by `contacts:read`. The stale
+`GET /api/contacts/search` entry Task 4 was to delete is likewise already gone.
+
+- [x] **Step 1: Add the failing test** — a `contacts:read`-only token may
   export but NOT import; a `contacts:write`-only token the reverse.
-- [ ] **Step 2: Add the table entries**
+- [x] **Step 2: Add the table entries**
 
 ```go
 "GET /api/contacts/export":  {ScopeContactsRead},
 "POST /api/contacts/import": {ScopeContactsWrite},
 ```
 
-- [ ] **Step 3: Verify** — `cd tinycld/core/server && go test ./oauth/ -count=1`
-- [ ] **Step 4: Commit**
+- [x] **Step 3: Verify** — `cd tinycld/core/server && go test ./oauth/ -count=1`
+- [x] **Step 4: Commit**
 
 ---
 
