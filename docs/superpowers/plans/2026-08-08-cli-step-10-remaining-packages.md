@@ -103,7 +103,7 @@ proven reachable from `contacts/server`.
 |---|---|---|
 | 1 | Export the carddav codec | **done** (`c75c610`) |
 | 2–3 | contacts export/import endpoints + scopes | **done** (`c33ec73`; 3 was already shipped) |
-| 4 | contacts CLI (8 commands) | 2–3 merged |
+| 4 | contacts CLI (8 commands) | **done** — see below |
 | 5 | Export the caldav codec | — |
 | 6–7 | calendar ICS endpoints + scopes | 5 |
 | 8 | calendar CLI | 6–7 merged |
@@ -255,15 +255,15 @@ cli: {
 },
 ```
 
-- [ ] **Step 1: Write the failing tests** against a fake server
+- [x] **Step 1: Write the failing tests** against a fake server
   (`drive/cli/testserver_test.go` is the model). Cover: `search` targets
   `/api/search?pkg=contacts`; `rm` soft-deletes rather than DELETEs; `add`
   round-trips flags into a record; `export --out` writes a file.
-- [ ] **Step 2: Confirm failure**
-- [ ] **Step 3: Implement.** Reads/writes via `client.ListRecords` /
+- [x] **Step 2: Confirm failure**
+- [x] **Step 3: Implement.** Reads/writes via `client.ListRecords` /
   `CreateRecord` / `UpdateRecord`; `search` via the federated endpoint,
   rendering from `Fields`.
-- [ ] **Step 4: Regenerate + verify**
+- [x] **Step 4: Regenerate + verify**
 
 ```sh
 cd tinycld && pnpm run packages:generate
@@ -271,7 +271,43 @@ cd contacts/cli && go build ./... && go test ./... -count=1
 cd tinycld/cli && go build ./... && go test ./... -count=1
 ```
 
-- [ ] **Step 5: Commit** (contacts repo + the middleware cleanup in tinycld)
+- [ ] **Step 5: Commit** (contacts repo; no middleware cleanup needed — see below)
+
+**DONE** — 19 tests, all green; `cards/cli` was the model rather than
+`drive/cli` (no shared `api` module, so contacts' is the closer shape).
+Four things worth recording:
+
+1. **The Task 4 middleware cleanup was a no-op.** The stale
+   `GET /api/contacts/search` entry was already gone (as the plan's own header
+   warned it might be), so this task touches ONE repo, not two. Re-audited, not
+   assumed.
+2. **The scope plumbing was already correct** — `contacts:read`/`contacts:write`
+   are in both `cliScopes` (`tinycld/cli/auth.go`) and the seed migration. That
+   is the trap Task 10 Step 4 found three times over, so it was checked BEFORE
+   writing a line of command code. Tasks 7/8 get the same check for free
+   (`calendar:read` / `calendar:write` are present in both).
+
+   **Task 9 does not.** Verified against the tree, not assumed: there is no
+   `text:*` or `calc:*` scope anywhere — `oauth.go`'s `AllScopes` ends at
+   `cards`, and `text_comments` / `calc_comments` appear nowhere in
+   `middleware.go`'s collection table, so an OAuth token hits DEFAULT-DENY 403
+   on both. That makes Task 9 — billed as "smallest surface; independent" —
+   the one remaining task needing a **new scope pair**: constants in `oauth.go`
+   + `AllScopes`, collection entries in the scope table, `cliScopes` in
+   `tinycld/cli/auth.go`, and an APPENDED migration widening the seeded client
+   row (never an edit to `1985000001` — an already-provisioned DB will not
+   re-run it). Do that first; the commands are the easy half.
+3. **Two commands beyond the plan's eight**, both closing loops the plan's
+   surface left open: `rm --permanent` (the plan's `rm` is a soft delete, so
+   without this there is no way to empty the Trash) and `edit --restore` (with
+   `list --trashed`, the round trip is complete).
+4. **`go.sum` was seeded by copying `cards/cli`'s and deleting the `fracdex`
+   lines**, since `go mod tidy` does not work in this workspace — the same
+   constraint `contacts/server/go.mod` documents.
+
+Also shipped here rather than deferred to Task 10 Step 5: the
+`contacts/help/command-line.md` topic, plus core's "Package commands" list,
+which had drifted — it named only drive and mail, missing `cards` entirely.
 
 ---
 
@@ -397,9 +433,11 @@ from server types (the module boundary keeps them out of reach — see
   — three of four bugs were a collection or scope missing from a hand-maintained
   list, invisible to a fake server that has no scope layer at all. Tasks 3 and 7
   are the highest-risk steps in this plan, not the boilerplate they look like.
-- [ ] **Step 5: Help topics** — `contacts/help/command-line.md` and
-  `calendar/help/command-line.md`, following `drive/help/command-line.md`.
-  Cross-link from `core/help/command-line.md`'s "Package commands" section.
+- [ ] **Step 5: Help topics** — `contacts/help/command-line.md` **done** (with
+  Task 4, not deferred); `calendar/help/command-line.md` still owed, following
+  `drive/help/command-line.md`. Core's "Package commands" section is now a
+  list and already links contacts — it had also been missing `cards` entirely,
+  fixed in the same pass. Add calendar there when Task 8 lands.
 - [ ] **Step 6: Full gate**
 
 ```sh
