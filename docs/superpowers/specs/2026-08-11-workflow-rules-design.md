@@ -37,7 +37,7 @@ POST …/run (manual)            ─┘
 
 - Packages contribute **catalogs, not code** (except optional native-action Go/TS handlers).
 - Core owns: the manifest contract, storage (`rules`, `rule_runs`), the Go engine, and all UI components.
-- The engine lives in **core Go**, so it runs in multi-org tenant mode (where no package Go is linked). Record-op actions and core-native actions work everywhere; package-native actions are single-tenant only.
+- The engine lives in **core Go**, so it runs in every deployment shape. *(Correction, 2026-08-15: an earlier revision claimed multi-org tenants link no package Go. They do — a tenant is a per-org build artifact linking exactly that org's package set, see `multi-org/README.md` — so package-native actions work wherever the package is installed; "declared-but-unregistered" remains the supported state for orgs without the package.)*
 
 ## Manifest contract
 
@@ -112,7 +112,7 @@ Schedule/manual rules have no trigger record: no conditions, no trigger-targetin
 
 ### Native action registration
 
-Package Go registers handlers from its existing `Register(app)` (mirroring `$`-binding registration): `automation.RegisterAction('mail:send-message', handler)`. A declared native action with no registered handler (tenant mode, or package removed) renders greyed out in the builder and flips affected rules to "inactive: needs X".
+Package Go registers handlers from its existing `Register(app)` (mirroring `$`-binding registration): `automation.RegisterAction('mail:send-message', handler)`. A declared native action with no registered handler (the package isn't in this org's build, or was removed) renders greyed out in the builder and flips affected rules to "inactive: needs X".
 
 ## Data model
 

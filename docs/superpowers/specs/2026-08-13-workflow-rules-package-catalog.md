@@ -53,9 +53,12 @@ entries below are native rather than declarative.
   semantics require a native handler.
 - No date math in params — "due in 3 days" needs a native handler taking an
   offset number.
-- Native actions are **single-tenant unless the handler lives in core**: a
-  multi-org tenant links no feature Go. Declared-but-unregistered is a supported
-  state (UI greys it out as "needs \<pkg\>").
+- Native actions are available **wherever the org's build links the package's
+  Go** — which is every deployment shape that has the package installed, a
+  multi-org tenant included (its per-org artifact links exactly the org's
+  package set; an earlier revision wrongly said tenants link no feature Go).
+  Declared-but-unregistered is a supported state (UI greys it out as
+  "needs \<pkg\>").
 - Owner auto-detection only finds `user` / `owner` / `author` relations to
   `users`. Anything else needs `ownerField` or a registered resolver.
 - Native handlers are **not** pkgaccess-gated — they receive a superuser `app`
