@@ -151,19 +151,35 @@ import { create, persist, asyncStorage } from '@tinycld/core/lib/store'
 
 ## Logging
 
-No central `log` helper. **Don't import `@tinycld/core/lib/logger` — it doesn't exist** (older drafts reference it).
+**Client → `log` from `@tinycld/core/lib/logger`.** Every call becomes a Sentry
+breadcrumb; calls at or above `coreConfig.logLevel` (default `warn` in release,
+`debug` in dev) also become Sentry events.
 
-- **Errors → `captureException`** from `@tinycld/core/lib/errors`. Signature: `captureException(context: string, error: unknown, extra?)`. `context` is a short stable string Sentry groups on (e.g. `'mail.openDraft.fetchBody'`); `extra` is variable detail. Rethrow when the caller must handle it; swallow only when the surface recovers, with a comment saying why.
-  ```ts
-  try {
-      await pb.collection('example').create(data)
-  } catch (err) {
-      captureException('example.create', err, { id: data.id })
-      throw err
-  }
-  ```
-- **Form validation failures → `handleMutationErrorsWithForm`** (as the mutation's `onError`). Don't `captureException` these — they aren't bugs.
-- **Dev-only tracing → `console.*` guarded by `__DEV__`:** `if (__DEV__) console.debug('[mail.compose] draft id', draftId)`. Never ship an unguarded `console.log`.
+    import { log } from '@tinycld/core/lib/logger'
+
+    log.debug('mail.compose', 'draft saved', { draftId })
+    log.warn('mail.imap', 'reconnect attempt', { attempt })
+    log.error('mail.send', err, { messageId })
+
+`context` is a short stable dotted string Sentry groups on; `extra` is variable detail.
+`captureException` from `@tinycld/core/lib/errors` still works and is an alias for
+`log.error`.
+
+**Never `console.*` in runtime code** — biome enforces this as an error. Build scripts
+and CLI tooling are exempt via scoped overrides.
+
+**Server → `logging.ForPackage("<slug>")` from `tinycld.org/core/logging`.**
+Returns an `*slog.Logger` stamped with a `pkg` attribute. Records fan out to stderr
+(`info`+), the PocketBase `_logs` table (`info`+), and Sentry (`warn`+).
+
+    log := logging.ForPackage("cards")
+    log.WarnContext(ctx, "refusing to flush a card from another board", "cardID", id)
+
+Prefer the `*Context` variants when a `ctx` is in scope — the per-request Sentry hub
+carries the user id, so those calls get user attribution for free. Calls without a
+`ctx` still log and still reach Sentry, just unattributed. Do not add a `ctx` parameter
+to a function solely to log. Do not write manual `"cards: "` message prefixes; the `pkg`
+attribute replaces them.
 
 ## Assembling & installing a workspace
 
