@@ -74,3 +74,15 @@ From any member dir: `pnpm exec tinycld-pkg check` (typecheck + unit),
 
 See the [bootstrap README](https://github.com/tinycld/bootstrap#readme) for the
 full CLI reference.
+
+## Also worth knowing
+
+**The `tinycld` CLI** — a Go command line tool for Drive, Mail, Cards, Contacts,
+Calendar and document/spreadsheet comments. Each server cross-compiles its own copy
+for its installed package set; users download it from Settings → Personal → About.
+Not to be confused with `tinycld-pkg` above, which is the per-member dev tool.
+[Docs](https://tinycld.org/docs/command-line-tool).
+
+**Automation rules** — server-side workflow rules (When / If / Then) users configure
+at Settings → Rules; packages contribute triggers and actions through their manifest.
+[Docs](https://tinycld.org/docs/automation-rules).
