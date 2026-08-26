@@ -56,8 +56,8 @@ overrides:
   '@gluestack-ui/utils': 5.0.5-alpha.0
   '@sentry/react-native': 7.11.0
   '@shopify/flash-list': 2.0.2
-  '@tanstack/db': 0.6.8
-  '@tanstack/react-db': 0.1.86
+  '@tanstack/db': 0.8.5
+  '@tanstack/react-db': 0.3.5
   '@tanstack/react-query': 5.101.0
   expo: 55.0.26
   expo-image: 55.0.11
