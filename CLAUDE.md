@@ -258,7 +258,7 @@ The topic then appears in the help hub (`/help`), the per-package help screen, a
 
 ## Generated output is gitignored — never commit it
 
-The generator (`tinycld/scripts/generate.ts`, run by postinstall and `pnpm run packages:generate`) emits, all gitignored in the `tinycld` repo: `tinycld.config.ts` + `tinycld.seeds.ts`, the `app/(app)/<slug>/**` and `app/p/<path>` route re-exports, `lib/generated/*` (incl. the `@tinycld/app-generated` `package.json`), and `server/package_extensions.go` / `server/go.work` / `server/pb_*` symlinks. The `node_modules/@tinycld/*` symlinks (from `link-members.ts`) are likewise local-only, and `tinycld/core/types/pbSchema.ts` / `pbZodSchema.ts` are regenerated every install from the on-disk PocketBase migrations (the source of truth) — don't edit any of them. Full inventory: `tinycld/CONTRIBUTING.md` and `tinycld/docs/packages.md`.
+The generator (`tinycld/scripts/generate.ts`, run by postinstall and `pnpm run packages:generate`) emits, all gitignored in the `tinycld` repo: `tinycld.config.ts` + `tinycld.seeds.ts`, the `app/a/(app)/<slug>/**` and `app/p/<path>` route re-exports, `lib/generated/*` (incl. the `@tinycld/app-generated` `package.json`), and `server/package_extensions.go` / `server/go.work` / `server/pb_*` symlinks. The `node_modules/@tinycld/*` symlinks (from `link-members.ts`) are likewise local-only, and `tinycld/core/types/pbSchema.ts` / `pbZodSchema.ts` are regenerated every install from the on-disk PocketBase migrations (the source of truth) — don't edit any of them. Full inventory: `tinycld/CONTRIBUTING.md` and `tinycld/docs/packages.md`.
 
 ## Further reading
 
