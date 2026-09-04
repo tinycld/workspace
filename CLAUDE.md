@@ -174,13 +174,13 @@ and CLI tooling are exempt via scoped overrides.
 Returns an `*slog.Logger` stamped with a `pkg` attribute. Records fan out to stderr
 (`info`+), the PocketBase `_logs` table (`info`+), and Sentry (`warn`+).
 
-    log := logging.ForPackage("cards")
+    log := logging.ForPackage("boards")
     log.WarnContext(ctx, "refusing to flush a card from another board", "cardID", id)
 
 Prefer the `*Context` variants when a `ctx` is in scope — the per-request Sentry hub
 carries the user id, so those calls get user attribution for free. Calls without a
 `ctx` still log and still reach Sentry, just unattributed. Do not add a `ctx` parameter
-to a function solely to log. Do not write manual `"cards: "` message prefixes; the `pkg`
+to a function solely to log. Do not write manual `"boards: "` message prefixes; the `pkg`
 attribute replaces them.
 
 ## Assembling & installing a workspace

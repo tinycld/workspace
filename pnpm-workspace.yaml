@@ -27,7 +27,7 @@ packages:
   - text
   - calc
   - calendar
-  - cards
+  - boards
   - google-takeout-import
   - search-alpha
   - search-beta
