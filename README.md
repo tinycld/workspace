@@ -77,7 +77,7 @@ full CLI reference.
 
 ## Also worth knowing
 
-**The `tinycld` CLI** — a Go command line tool for Drive, Mail, Cards, Contacts,
+**The `tinycld` CLI** — a Go command line tool for Drive, Mail, Boards, Contacts,
 Calendar and document/spreadsheet comments. Each server cross-compiles its own copy
 for its installed package set; users download it from Settings → Personal → About.
 Not to be confused with `tinycld-pkg` above, which is the per-member dev tool.
