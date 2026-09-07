@@ -1,6 +1,15 @@
-# Handoff: boards URL-driven routing — parked, React #185 (2026-09-07)
+# Handoff: boards URL routing (parked) + peek dismissal (shipped) (2026-09-07)
 
-**Status: NOT WORKING.** Every deep link crashes the screen with React error
+Two halves, from one batch of boards UX work.
+
+**The routing is PARKED and does not work** — that is the bulk of this document.
+**The peek dismissal SHIPPED**, but it took six iterations and the failure modes
+are worth reading before touching that surface again; see "The peek dismissal"
+below.
+
+## Routing: status
+
+**NOT WORKING.** Every deep link crashes the screen with React error
 #185 (infinite setState), and 14 boards e2e specs fail because of it. The work
 is preserved on the boards branch **`wip/boards-url-routing`** (commit
 `b6d52a3`), which holds all five UX items from the original task; the four that
@@ -105,6 +114,85 @@ The plumbing is sound; only the sync is unsound.
 generically for every package, and mail, drive and contacts all read it. Every
 notification row already written carries it. Boards may stop MINTING it but must
 keep ACCEPTING it, or those stored deep links go dead.
+
+## The peek dismissal (item 5) — six defects, and why they are worth reading
+
+Shipped on `feat/boards-ux-fixes`, but the path there is the useful part. "Press
+the board to dismiss the card peek" sounds like a one-line feature. It produced
+six distinct defects, every one caught by e2e and none reachable by a unit test.
+Anyone extending this surface should expect the same.
+
+1. **A full-viewport `Pressable` intercepted every pointer event on the board.**
+   It dismissed correctly and made everything behind it dead — clicking another
+   card, a column menu, the header. Twelve specs failed at once, all naming
+   `boards-peek-backdrop intercepts pointer events`. Fixed by dropping the
+   overlay entirely on web and using core's `useOverlayLayer`
+   (`core/ui/overlay/layer-stack.ts`), which listens at the document in the
+   capture phase without covering anything.
+
+2. **The layer was keyed on MOUNT, not focus.** Expanding a card to its full
+   page pushes a screen over the board, and the board — with its peek — stays
+   mounted underneath. The peek therefore held the top layer while invisible,
+   and the first click on the full page read as "outside" and dismissed it,
+   taking its collaborative editor with it. Fixed by gating membership on
+   `useFocusEffect`. Core's shortcut scopes make exactly this split for exactly
+   this reason (`lib/shortcuts/scopes.ts`) — that comment is worth reading
+   before touching any route-scoped stack.
+
+3. **`pointerdown` fires before a card's `onPress`.** Clicking one card to open
+   another dismissed the peek instead of swapping to it: the close won the race
+   and shut the panel the press was about to fill. Card faces and list/backlog
+   rows are now exempt — pressing one already swaps the peek's content.
+
+4. **`MentionPopover` portals to `document.body`.** It renders through
+   `createPortal` so it can float over the editor, which puts it outside the
+   panel's DOM subtree — so clicking a mention suggestion read as "outside the
+   peek" and dismissed it mid-@mention. Also exempt.
+
+5. **`card-mentions.spec.ts` has its own local `openBoard`** with the same
+   `getByText(name).first()` ambiguity that was fixed in the shared helper: a
+   board's name renders in the sidebar AND the board header. Latent on `main`;
+   the peek changes shifted what was on screen enough to expose it.
+
+6. **The shared `openBoard` helper had that same ambiguity**, affecting several
+   specs at once.
+
+**The structural lesson.** The dismissal now works by *enumerating* what counts
+as "inside" — the panel, card faces, list rows, the mention popover. That list
+is hand-maintained and nothing in the codebase will remind the next person to
+extend it when a new portaled surface is added. Surfaces that join the layer
+stack themselves (core's `Menu`, `Popover`, `Dialog`) need no entry, because the
+stack is a STACK and only the top layer answers a press. The right shape is
+probably to make the peek a first-class overlay layer that core owns end to end,
+so membership is declared rather than enumerated. That refactor was not attempted
+here.
+
+`insideNodes()` in `components/CardPeek.tsx` is the list. If a new surface inside
+the peek renders through a portal, it belongs there.
+
+### A note on reading these e2e failures
+
+Two of the runs in this sequence ended with `card-estimate` and `card-editing`
+failing, which looked at first like a seventh and eighth surface needing an
+exemption — both are picker interactions inside the peek, so the story fit.
+
+It was not. The error was:
+
+```
+locator.click: Test timeout of 30000ms exceeded.
+  - waiting for getByText('+ New board', { exact: true })
+```
+
+That is `createBoard` in test SETUP, before a peek exists at all. Both tests had
+passed in the three preceding runs on identical peek code; both timed out at
+exactly 30.5s on adjacent test numbers; and unrelated `wip-and-aging` specs in
+the same run took 18s where they normally take 3s. It was machine load, not a
+regression.
+
+The general lesson, since it cost real time here: **an interception error names
+the intercepting element** ("`boards-peek-backdrop` intercepts pointer events"),
+and a stall does not. Read the error text before theorising from which tests
+failed — a plausible-sounding grouping ("both are pickers") is not evidence.
 
 ## Bugs found and fixed along the way (all shipped separately)
 
