@@ -32,6 +32,10 @@ React Native (Expo), Cobra for CLI, vitest + Playwright, `go test`.
 - **Avoid `useState`/`useEffect`** — see the CLAUDE.md primitive table. Zustand for shared UI state, `useForm` + zod for forms.
 - **Keep JSX minimal:** no ternaries, `.map()` or calculations in the return. Conditional visibility via an `isVisible` prop returning `null`, not `{cond && <X/>}`.
 - **No raw hex colors.** Semantic Tailwind tokens (`text-foreground`) or `useThemeColor('foreground')`.
+- **Test fixtures that WRITE a link row must use a real URL.** `boards_pr_links.url`
+  is a PocketBase `url`-type field; a placeholder like `"u"` fails validation and the
+  upsert silently no-ops (logged WARN, not an error), so the test passes while linking
+  nothing. Pure decoder tests never reach the field and may use anything.
 - **Never `console.*`** in runtime code. Client: `log` from `@tinycld/core/lib/logger`. Server: `logging.ForPackage("boards")`.
 - **Never use `any`. Never add `biome-ignore`.** Biome: 4-space indent, single quotes, ES5 trailing commas.
 - **Both platforms.** Web and native must both work; a platform-specific feature needs explicit sign-off.
@@ -1866,7 +1870,7 @@ func TestGitHubWebhookSource_AppliesAPullRequestEvent(t *testing.T) {
 	body := []byte(`{
 		"action": "opened",
 		"pull_request": {
-			"number": 60, "title": "t", "body": "", "html_url": "u",
+			"number": 60, "title": "t", "body": "", "html_url": "https://github.com/o/r/pull/60",
 			"state": "open", "merged": false, "draft": false,
 			"head": { "ref": "OTTER-10-fix" }, "user": { "login": "nas" }
 		},
