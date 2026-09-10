@@ -1075,7 +1075,7 @@ card arrive concurrently, so the per-card lock is here from the first commit.
 - Produces:
   - `func registerPRRollup(app core.App)`
   - `func recountCardPRs(app core.App, cardID string)`
-  - `func derivePRState(links []*core.Record) (state string, reviewState string)`
+  - `func derivePRStateFromStates(states []string, reviews []string) (state string, reviewState string)` — pure and string-based so the all-merged semantic is table-testable without a database
 
 - [ ] **Step 1: Read the reference implementation**
 
