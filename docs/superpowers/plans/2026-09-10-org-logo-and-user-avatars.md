@@ -23,6 +23,8 @@
 - **Migrations:** unreleased migrations may be edited in place; a released version's are immutable. New migration files go in `tinycld/core/server/pb_migrations/` with a numeric prefix above the current maximum (`2010000000_prefix_notification_urls.js`).
 - **Crop rect shape** (verbatim, used across every task): `{ x: number, y: number, zoom: number }` where `x`/`y` are the focal point as fractions of source dimensions in `[0,1]` and `zoom >= 1` is the scale factor relative to cover-fit. Stored as a JSON string. Absent/invalid = `{ x: 0.5, y: 0.5, zoom: 1 }` (center-cover).
 - **Max upload edge:** 1024px. **JPEG quality:** 0.85. **Served thumb size:** 256.
+- **Component tests use `@testing-library/react` under happy-dom**, never `@testing-library/react-native` (not installed, and adding it is forbidden). Start each component test file with `// @vitest-environment happy-dom`, import `{ cleanup, fireEvent, render }` from `@testing-library/react`, query with `container.querySelector('[testid="…"]')`, and assert on `.style` / `.textContent` / `.getAttribute()`. There is **no jest-dom**, so `toHaveStyle`, `toBeVisible`, and `toBeInTheDocument` do not exist — use plain vitest matchers. react-native-web renders RN views to DOM nodes and emits colors as `rgb(...)` and lengths as `px` strings. Reference: `tinycld/core/tests/unit/toast-placement.test.tsx`.
+- **Native modules must be `vi.mock`'d** in component tests (`expo-image`, `react-native-gesture-handler`, `expo-constants`, …) — their load-time side effects crash under Node. Reference: `tinycld/core/tests/unit/about-section.test.tsx`.
 - **Running checks:** from inside a member, `pnpm exec tinycld-pkg check` (biome + tsc + vitest). Go tests: `cd tinycld/core/server && go test ./...`.
 
 ---
@@ -436,16 +438,55 @@ git commit -m "feat(core): add pure avatar helpers for color, initials and crop 
 
 - [ ] **Step 1: Write the failing test**
 
-Create `tinycld/core/tests/unit/avatar-component.test.tsx`:
+Create `tinycld/core/tests/unit/avatar-component.test.tsx`.
+
+**Testing idiom — follow it exactly.** This repo tests components with
+`@testing-library/react` under happy-dom (react-native-web renders RN views to
+DOM nodes). There is **no** `@testing-library/react-native` and **no** jest-dom,
+so there is no `screen`, no `getByTestId`, and no `toHaveStyle`. Query with
+`container.querySelector('[testid="…"]')` and assert on `.style` /
+`.textContent`. `tinycld/core/tests/unit/toast-placement.test.tsx` is the
+reference example.
 
 ```tsx
+// @vitest-environment happy-dom
+import { cleanup, render } from '@testing-library/react'
 import { Avatar } from '@tinycld/core/components/Avatar'
-import { render, screen } from '@testing-library/react-native'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+// expo-image is a native module wrapper; under Node it has no value. The
+// component only needs an <img>-alike that forwards testID and style.
+vi.mock('expo-image', () => ({
+    Image: ({ testID, style, source }: never) => {
+        const props = { testID, style, source } as {
+            testID?: string
+            style?: Record<string, unknown>
+            source?: { uri?: string }
+        }
+        return (
+            <img
+                testid={props.testID}
+                src={props.source?.uri}
+                alt=""
+                style={props.style as never}
+            />
+        )
+    },
+}))
+
+afterEach(cleanup)
+
+function renderAvatar(element: React.ReactElement) {
+    const { container } = render(element)
+    const root = container.querySelector('[testid="av"]') as HTMLElement | null
+    if (!root) throw new Error('avatar did not render')
+    const image = container.querySelector('[testid="av-image"]') as HTMLElement | null
+    return { root, image, container }
+}
 
 describe('Avatar precedence', () => {
     it('renders the image when one is supplied, over emoji and initials', () => {
-        render(
+        const { root, image } = renderAvatar(
             <Avatar
                 name="Ada Lovelace"
                 emoji="🦖"
@@ -453,47 +494,53 @@ describe('Avatar precedence', () => {
                 testID="av"
             />
         )
-        expect(screen.getByTestId('av-image')).toBeTruthy()
-        expect(screen.queryByText('🦖')).toBeNull()
-        expect(screen.queryByText('AL')).toBeNull()
+        expect(image).not.toBeNull()
+        expect(root.textContent).not.toContain('🦖')
+        expect(root.textContent).not.toContain('AL')
     })
 
     it('renders the emoji when there is no image', () => {
-        render(<Avatar name="Ada Lovelace" emoji="🦖" testID="av" />)
-        expect(screen.queryByTestId('av-image')).toBeNull()
-        expect(screen.getByText('🦖')).toBeTruthy()
-        expect(screen.queryByText('AL')).toBeNull()
+        const { root, image } = renderAvatar(<Avatar name="Ada Lovelace" emoji="🦖" testID="av" />)
+        expect(image).toBeNull()
+        expect(root.textContent).toContain('🦖')
+        expect(root.textContent).not.toContain('AL')
     })
 
     it('falls back to two-letter initials', () => {
-        render(<Avatar name="Ada Lovelace" testID="av" />)
-        expect(screen.getByText('AL')).toBeTruthy()
+        const { root } = renderAvatar(<Avatar name="Ada Lovelace" testID="av" />)
+        expect(root.textContent).toContain('AL')
     })
 
     it('derives initials from the email when the name is blank', () => {
-        render(<Avatar name="" email="ada.lovelace@example.com" testID="av" />)
-        expect(screen.getByText('AL')).toBeTruthy()
+        const { root } = renderAvatar(
+            <Avatar name="" email="ada.lovelace@example.com" testID="av" />
+        )
+        expect(root.textContent).toContain('AL')
     })
 })
 
 describe('Avatar presentation', () => {
     it('is a full circle by default', () => {
-        render(<Avatar name="Ada Lovelace" size={40} testID="av" />)
-        expect(screen.getByTestId('av')).toHaveStyle({ borderRadius: 20 })
+        const { root } = renderAvatar(<Avatar name="Ada Lovelace" size={40} testID="av" />)
+        expect(root.style.borderRadius).toBe('20px')
     })
 
     it('uses a squircle radius when asked', () => {
-        render(<Avatar name="Ada Lovelace" size={40} shape="squircle" testID="av" />)
-        expect(screen.getByTestId('av')).toHaveStyle({ borderRadius: 40 * 0.32 })
+        const { root } = renderAvatar(
+            <Avatar name="Ada Lovelace" size={40} shape="squircle" testID="av" />
+        )
+        // 40 * 0.32
+        expect(root.style.borderRadius).toBe('12.8px')
     })
 
     it('honors an explicit color override, as presence does', () => {
-        render(<Avatar name="Ada" color="#123456" testID="av" />)
-        expect(screen.getByTestId('av')).toHaveStyle({ backgroundColor: '#123456' })
+        const { root } = renderAvatar(<Avatar name="Ada" color="#123456" testID="av" />)
+        // react-native-web emits colors as rgb().
+        expect(root.style.backgroundColor).toBe('rgb(18, 52, 86)')
     })
 
     it('applies the crop transform to the image', () => {
-        render(
+        const { image } = renderAvatar(
             <Avatar
                 name="Ada"
                 size={100}
@@ -501,19 +548,23 @@ describe('Avatar presentation', () => {
                 testID="av"
             />
         )
-        expect(screen.getByTestId('av-image')).toHaveStyle({
-            width: 200,
-            height: 200,
-            transform: [{ translateX: -100 }, { translateY: 0 }],
-        })
+        if (!image) throw new Error('avatar image did not render')
+        expect(image.style.width).toBe('200px')
+        expect(image.style.height).toBe('200px')
+        expect(image.style.transform).toContain('-100px')
     })
 
     it('exposes the name to assistive technology', () => {
-        render(<Avatar name="Ada Lovelace" testID="av" />)
-        expect(screen.getByLabelText('Ada Lovelace')).toBeTruthy()
+        const { root } = renderAvatar(<Avatar name="Ada Lovelace" testID="av" />)
+        expect(root.getAttribute('aria-label')).toBe('Ada Lovelace')
     })
 })
 ```
+
+If react-native-web emits the `testID` prop under a different attribute name
+than `testid` (check a rendered node with `container.innerHTML` once), use
+whatever it actually emits — match the existing `toast-placement.test.tsx`
+behavior rather than changing the component to suit the test.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -702,12 +753,17 @@ git commit -m "feat(core): add unified Avatar component"
 
 - [ ] **Step 1: Write the failing test**
 
-Create `tinycld/core/tests/unit/avatar-stack.test.tsx`:
+Create `tinycld/core/tests/unit/avatar-stack.test.tsx`. Same testing idiom as
+Task 2 — `@testing-library/react` under happy-dom, `container.querySelector`,
+no `screen`/`toHaveStyle`:
 
 ```tsx
+// @vitest-environment happy-dom
+import { cleanup, render } from '@testing-library/react'
 import { AvatarStack } from '@tinycld/core/components/AvatarStack'
-import { render, screen } from '@testing-library/react-native'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+
+afterEach(cleanup)
 
 const items = [
     { key: 'a', name: 'Ada Lovelace' },
@@ -719,29 +775,33 @@ const items = [
 
 describe('AvatarStack', () => {
     it('renders every item when under the limit', () => {
-        render(<AvatarStack items={items.slice(0, 3)} max={4} testID="stack" />)
-        expect(screen.getByText('AL')).toBeTruthy()
-        expect(screen.getByText('GH')).toBeTruthy()
-        expect(screen.getByText('AT')).toBeTruthy()
-        expect(screen.queryByTestId('stack-overflow')).toBeNull()
+        const { container } = render(<AvatarStack items={items.slice(0, 3)} max={4} testID="stack" />)
+        expect(container.textContent).toContain('AL')
+        expect(container.textContent).toContain('GH')
+        expect(container.textContent).toContain('AT')
+        expect(container.querySelector('[testid="stack-overflow"]')).toBeNull()
     })
 
     it('caps at max and shows a +N badge for the remainder', () => {
-        render(<AvatarStack items={items} max={3} testID="stack" />)
-        expect(screen.getByTestId('stack-overflow')).toBeTruthy()
-        expect(screen.getByText('+2')).toBeTruthy()
-        expect(screen.queryByText('KJ')).toBeNull()
+        const { container } = render(<AvatarStack items={items} max={3} testID="stack" />)
+        expect(container.querySelector('[testid="stack-overflow"]')).not.toBeNull()
+        expect(container.textContent).toContain('+2')
+        expect(container.textContent).not.toContain('KJ')
     })
 
     it('overlaps every avatar after the first', () => {
-        render(<AvatarStack items={items.slice(0, 2)} max={4} size={30} testID="stack" />)
-        expect(screen.getByTestId('stack-item-0')).toHaveStyle({ marginLeft: 0 })
-        expect(screen.getByTestId('stack-item-1')).toHaveStyle({ marginLeft: -10 })
+        const { container } = render(
+            <AvatarStack items={items.slice(0, 2)} max={4} size={30} testID="stack" />
+        )
+        const first = container.querySelector('[testid="stack-item-0"]') as HTMLElement
+        const second = container.querySelector('[testid="stack-item-1"]') as HTMLElement
+        expect(first.style.marginLeft).toBe('0px')
+        expect(second.style.marginLeft).toBe('-10px')
     })
 
     it('renders nothing when empty', () => {
-        render(<AvatarStack items={[]} max={4} testID="stack" />)
-        expect(screen.queryByTestId('stack')).toBeNull()
+        const { container } = render(<AvatarStack items={[]} max={4} testID="stack" />)
+        expect(container.querySelector('[testid="stack"]')).toBeNull()
     })
 })
 ```
@@ -961,22 +1021,26 @@ The whole point of doing the refactor before the feature is that it should be a
 no-op. Create `tinycld/core/tests/unit/avatar-variants.test.tsx`:
 
 ```tsx
+// @vitest-environment happy-dom
+import { cleanup, render } from '@testing-library/react'
 import { Avatar } from '@tinycld/core/components/Avatar'
 import { AvatarStack } from '@tinycld/core/components/AvatarStack'
-import { render } from '@testing-library/react-native'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+
+afterEach(cleanup)
 
 // One snapshot per variant the four old renderers produced. These are the
 // guard against the collapse silently changing a surface nobody opened during
-// review.
+// review. Snapshotting innerHTML captures the rendered geometry and colors,
+// which is exactly what must not drift.
 describe('Avatar variants', () => {
     it('renders the solid circle (former NameAvatar)', () => {
-        const tree = render(<Avatar name="Ada Lovelace" colorKey="u1" size={40} />).toJSON()
-        expect(tree).toMatchSnapshot()
+        const { container } = render(<Avatar name="Ada Lovelace" colorKey="u1" size={40} />)
+        expect(container.innerHTML).toMatchSnapshot()
     })
 
     it('renders the soft squircle (former MemberAvatar)', () => {
-        const tree = render(
+        const { container } = render(
             <Avatar
                 name="Ada Lovelace"
                 email="ada@example.com"
@@ -984,19 +1048,19 @@ describe('Avatar variants', () => {
                 palette="soft"
                 shape="squircle"
             />
-        ).toJSON()
-        expect(tree).toMatchSnapshot()
+        )
+        expect(container.innerHTML).toMatchSnapshot()
     })
 
     it('renders the dimmed soft squircle', () => {
-        const tree = render(
+        const { container } = render(
             <Avatar name="Ada Lovelace" size={40} palette="soft" shape="squircle" dimmed />
-        ).toJSON()
-        expect(tree).toMatchSnapshot()
+        )
+        expect(container.innerHTML).toMatchSnapshot()
     })
 
     it('renders the presence stack (former PresenceAvatars inner)', () => {
-        const tree = render(
+        const { container } = render(
             <AvatarStack
                 items={[
                     { key: '1', name: 'Ada Lovelace', color: '#3b82f6', colorKey: 'u1' },
@@ -1006,12 +1070,12 @@ describe('Avatar variants', () => {
                 size={24}
                 ring="background"
             />
-        ).toJSON()
-        expect(tree).toMatchSnapshot()
+        )
+        expect(container.innerHTML).toMatchSnapshot()
     })
 
     it('renders the watcher stack with overflow (former CardWatchers)', () => {
-        const tree = render(
+        const { container } = render(
             <AvatarStack
                 items={[
                     { key: '1', name: 'Ada Lovelace', color: '#3b82f6', colorKey: 'u1' },
@@ -1022,8 +1086,8 @@ describe('Avatar variants', () => {
                 size={18}
                 ring="card"
             />
-        ).toJSON()
-        expect(tree).toMatchSnapshot()
+        )
+        expect(container.innerHTML).toMatchSnapshot()
     })
 })
 ```
@@ -1969,60 +2033,84 @@ The gesture math converts pan/zoom into the same normalized rect `Avatar` consum
 
 - [ ] **Step 1: Write the failing test**
 
-Create `tinycld/core/tests/unit/avatar-cropper.test.tsx`:
+Create `tinycld/core/tests/unit/avatar-cropper.test.tsx`. Same idiom as Tasks 2
+and 3 — `@testing-library/react` under happy-dom. Presses are DOM `click`
+events via `fireEvent.click`, not `fireEvent.press`; zoom is driven through the
+control's own DOM event:
 
 ```tsx
+// @vitest-environment happy-dom
+import { cleanup, fireEvent, render } from '@testing-library/react'
 import { AvatarCropper } from '@tinycld/core/components/AvatarCropper'
-import { fireEvent, render, screen } from '@testing-library/react-native'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+// Gesture handler and expo-image are native wrappers with no value under Node.
+vi.mock('react-native-gesture-handler', () => ({
+    Gesture: {
+        Pan: () => ({ onBegin: () => ({ onUpdate: () => ({ runOnJS: () => ({}) }) }) }),
+        Pinch: () => ({ onUpdate: () => ({ runOnJS: () => ({}) }) }),
+        Simultaneous: () => ({}),
+    },
+    GestureDetector: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}))
+vi.mock('expo-image', () => ({ Image: () => <img alt="" /> }))
+
+afterEach(cleanup)
+
+function setup(initialCrop?: { x: number; y: number; zoom: number }) {
+    const onCommit = vi.fn()
+    const onCancel = vi.fn()
+    const { container } = render(
+        <AvatarCropper
+            imageUri="https://example.test/a.jpg"
+            initialCrop={initialCrop}
+            onCommit={onCommit}
+            onCancel={onCancel}
+        />
+    )
+    const byId = (id: string) => {
+        const node = container.querySelector(`[testid="${id}"]`) as HTMLElement | null
+        if (!node) throw new Error(`${id} did not render`)
+        return node
+    }
+    return { onCommit, onCancel, byId }
+}
 
 describe('AvatarCropper', () => {
     it('commits the initial crop unchanged when nothing is adjusted', () => {
-        const onCommit = vi.fn()
-        render(
-            <AvatarCropper
-                imageUri="https://example.test/a.jpg"
-                initialCrop={{ x: 0.25, y: 0.75, zoom: 2 }}
-                onCommit={onCommit}
-                onCancel={vi.fn()}
-            />
-        )
-        fireEvent.press(screen.getByTestId('avatar-cropper-save'))
+        const { onCommit, byId } = setup({ x: 0.25, y: 0.75, zoom: 2 })
+        fireEvent.click(byId('avatar-cropper-save'))
         expect(onCommit).toHaveBeenCalledWith({ x: 0.25, y: 0.75, zoom: 2 })
     })
 
-    it('commits a clamped rect when the zoom slider moves', () => {
-        const onCommit = vi.fn()
-        render(
-            <AvatarCropper imageUri="https://example.test/a.jpg" onCommit={onCommit} onCancel={vi.fn()} />
-        )
-        fireEvent(screen.getByTestId('avatar-cropper-zoom'), 'valueChange', 3)
-        fireEvent.press(screen.getByTestId('avatar-cropper-save'))
+    it('commits the zoom the control reports', () => {
+        const { onCommit, byId } = setup()
+        fireEvent.change(byId('avatar-cropper-zoom'), { target: { value: '3' } })
+        fireEvent.click(byId('avatar-cropper-save'))
         expect(onCommit).toHaveBeenCalledWith(expect.objectContaining({ zoom: 3 }))
     })
 
     it('never commits a zoom below 1', () => {
-        const onCommit = vi.fn()
-        render(
-            <AvatarCropper imageUri="https://example.test/a.jpg" onCommit={onCommit} onCancel={vi.fn()} />
-        )
-        fireEvent(screen.getByTestId('avatar-cropper-zoom'), 'valueChange', 0.1)
-        fireEvent.press(screen.getByTestId('avatar-cropper-save'))
+        const { onCommit, byId } = setup()
+        fireEvent.change(byId('avatar-cropper-zoom'), { target: { value: '0.1' } })
+        fireEvent.click(byId('avatar-cropper-save'))
         expect(onCommit).toHaveBeenCalledWith(expect.objectContaining({ zoom: 1 }))
     })
 
     it('calls onCancel without committing', () => {
-        const onCommit = vi.fn()
-        const onCancel = vi.fn()
-        render(
-            <AvatarCropper imageUri="https://example.test/a.jpg" onCommit={onCommit} onCancel={onCancel} />
-        )
-        fireEvent.press(screen.getByTestId('avatar-cropper-cancel'))
+        const { onCommit, onCancel, byId } = setup()
+        fireEvent.click(byId('avatar-cropper-cancel'))
         expect(onCancel).toHaveBeenCalled()
         expect(onCommit).not.toHaveBeenCalled()
     })
 })
 ```
+
+The zoom control must therefore be something that emits a DOM `change` with a
+numeric `value` — a plain `<input type="range">` on web is the simplest thing
+that satisfies both this test and the accessibility requirement. Adapt the two
+zoom tests to whatever control you build, but keep the `avatar-cropper-zoom`
+testID and the clamping assertions.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -2040,7 +2128,6 @@ import { Image } from 'expo-image'
 import { useRef, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
-import { Slider } from '@tinycld/core/ui/slider'
 
 interface AvatarCropperProps {
     imageUri: string
@@ -2119,12 +2206,9 @@ export function AvatarCropper({
                 </View>
             </GestureDetector>
 
-            <Slider
-                testID="avatar-cropper-zoom"
-                minimumValue={1}
-                maximumValue={8}
-                value={crop.zoom}
-                onValueChange={zoom => setCrop(current => clampCrop({ ...current, zoom }))}
+            <ZoomControl
+                zoom={crop.zoom}
+                onZoom={zoom => setCrop(current => clampCrop({ ...current, zoom }))}
             />
 
             <View className="flex-row gap-3">
@@ -2150,7 +2234,48 @@ export function AvatarCropper({
 }
 ```
 
-If core has no `ui/slider` component, check `tinycld/core/ui/` first; if genuinely absent, render the zoom control with the same `Pressable`-based +/- pair used elsewhere in core rather than adding a dependency, keeping the `avatar-cropper-zoom` testID on the control and firing the same `valueChange`-equivalent handler.
+**Core has no slider component** — verified, `tinycld/core/ui/` contains none — and the Global Constraints forbid adding a dependency. Write `ZoomControl` in this same file as a small platform-split control:
+
+```tsx
+function ZoomControl({ zoom, onZoom }: { zoom: number; onZoom: (zoom: number) => void }) {
+    if (Platform.OS === 'web') {
+        // A native range input is the accessible, keyboard-operable choice on
+        // web, and it is what the majority of users get.
+        return (
+            <input
+                testid="avatar-cropper-zoom"
+                aria-label="Zoom"
+                type="range"
+                min={1}
+                max={8}
+                step={0.1}
+                value={zoom}
+                onChange={event => onZoom(Number(event.target.value))}
+                style={{ width: '100%' }}
+            />
+        )
+    }
+
+    // Native gets pinch-to-zoom from the gesture above; these are the
+    // discrete fallback for anyone who can't pinch.
+    return (
+        <View testID="avatar-cropper-zoom" className="flex-row gap-3">
+            <ZoomStep label="−" onPress={() => onZoom(zoom - 0.5)} />
+            <ZoomStep label="+" onPress={() => onZoom(zoom + 0.5)} />
+        </View>
+    )
+}
+
+function ZoomStep({ label, onPress }: { label: string; onPress: () => void }) {
+    return (
+        <Pressable onPress={onPress} className="rounded-lg px-4 py-2 border border-border">
+            <Text className="text-foreground font-semibold">{label}</Text>
+        </Pressable>
+    )
+}
+```
+
+Import `Platform` from `react-native` alongside the existing imports. Clamping happens in the parent's `onZoom`, so neither branch can commit an out-of-range value.
 
 `useState` here is genuinely local synchronous UI state that no other component reads — the case the CLAUDE.md guidance explicitly allows.
 
