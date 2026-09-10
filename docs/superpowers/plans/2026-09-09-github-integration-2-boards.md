@@ -32,6 +32,11 @@ React Native (Expo), Cobra for CLI, vitest + Playwright, `go test`.
 - **Avoid `useState`/`useEffect`** — see the CLAUDE.md primitive table. Zustand for shared UI state, `useForm` + zod for forms.
 - **Keep JSX minimal:** no ternaries, `.map()` or calculations in the return. Conditional visibility via an `isVisible` prop returning `null`, not `{cond && <X/>}`.
 - **No raw hex colors.** Semantic Tailwind tokens (`text-foreground`) or `useThemeColor('foreground')`.
+- **`setupCardsEnv(t)` returns `*cardsEnv` with a LOWERCASE `app` field** (`env.app`).
+  It already seeds `env.project`, `env.list`, `env.card`, but deliberately leaves the
+  project slugless and the card unnumbered (`rls_setup_test.go:246`), so any suite that
+  resolves card KEYS must stamp `slug` and `number` itself or every lookup silently
+  returns nothing. `server/github_links_test.go` has a `seedBoardWithCard` helper.
 - **Test fixtures that WRITE a link row must use a real URL.** `boards_pr_links.url`
   is a PocketBase `url`-type field; a placeholder like `"u"` fails validation and the
   upsert silently no-ops (logged WARN, not an error), so the test passes while linking
@@ -1399,7 +1404,7 @@ func TestApplyPREvent_LinksByBranchName(t *testing.T) {
 	board, card := seedBoardWithCard(t, env, "OTTER", 1)
 	attachRepo(t, env, board, "o/r")
 
-	err := applyPREvent(env.App, prEvent{
+	err := applyPREvent(env.app, prEvent{
 		Repo: "o/r", Number: 42, Branch: "nas/OTTER-1-fix",
 		Title: "unrelated", Body: "", State: "open",
 		URL: "https://github.com/o/r/pull/42",
@@ -1425,7 +1430,7 @@ func TestApplyPREvent_LinksByTitleAndBody(t *testing.T) {
 	board, card := seedBoardWithCard(t, env, "OTTER", 2)
 	attachRepo(t, env, board, "o/r")
 
-	if err := applyPREvent(env.App, prEvent{
+	if err := applyPREvent(env.app, prEvent{
 		Repo: "o/r", Number: 43, Branch: "no-key-here",
 		Title: "OTTER-2 fix it", State: "open",
 	}); err != nil {
@@ -1445,7 +1450,7 @@ func TestApplyPREvent_SkipDirectiveSuppressesTheLink(t *testing.T) {
 	// The branch names the card, but the body opts out. The body must win —
 	// this is the ONLY durable override, because branch-name linkage
 	// re-derives on every delivery.
-	if err := applyPREvent(env.App, prEvent{
+	if err := applyPREvent(env.app, prEvent{
 		Repo: "o/r", Number: 44, Branch: "OTTER-3-fix",
 		Body: "skip OTTER-3", State: "open",
 	}); err != nil {
@@ -1462,19 +1467,19 @@ func TestApplyPREvent_TombstoneSurvivesRederivation(t *testing.T) {
 	attachRepo(t, env, board, "o/r")
 
 	ev := prEvent{Repo: "o/r", Number: 45, Branch: "OTTER-4-fix", State: "open"}
-	if err := applyPREvent(env.App, ev); err != nil {
+	if err := applyPREvent(env.app, ev); err != nil {
 		t.Fatalf("first apply: %v", err)
 	}
 
 	// The user unlinks: tombstone rather than delete.
 	links := findLinks(t, env, card)
 	links[0].Set("unlinked", true)
-	if err := env.App.Save(links[0]); err != nil {
+	if err := env.app.Save(links[0]); err != nil {
 		t.Fatalf("tombstoning: %v", err)
 	}
 
 	// A later push re-delivers the same branch. The link must NOT come back.
-	if err := applyPREvent(env.App, ev); err != nil {
+	if err := applyPREvent(env.app, ev); err != nil {
 		t.Fatalf("second apply: %v", err)
 	}
 	for _, link := range findLinks(t, env, card) {
@@ -1489,12 +1494,12 @@ func TestApplyPREvent_UpdatesStateOnMerge(t *testing.T) {
 	board, card := seedBoardWithCard(t, env, "OTTER", 5)
 	attachRepo(t, env, board, "o/r")
 
-	if err := applyPREvent(env.App, prEvent{
+	if err := applyPREvent(env.app, prEvent{
 		Repo: "o/r", Number: 46, Branch: "OTTER-5-fix", State: "open",
 	}); err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	if err := applyPREvent(env.App, prEvent{
+	if err := applyPREvent(env.app, prEvent{
 		Repo: "o/r", Number: 46, Branch: "OTTER-5-fix", State: "merged",
 	}); err != nil {
 		t.Fatalf("merge: %v", err)
@@ -1516,7 +1521,7 @@ func TestApplyPREvent_IgnoresAnUnattachedRepo(t *testing.T) {
 	// even though the key resolves. Otherwise any repo could write links into
 	// any board that happens to share a slug.
 
-	if err := applyPREvent(env.App, prEvent{
+	if err := applyPREvent(env.app, prEvent{
 		Repo: "someone/else", Number: 47, Branch: "OTTER-6-fix", State: "open",
 	}); err != nil {
 		t.Fatalf("applyPREvent: %v", err)
@@ -1545,21 +1550,21 @@ func seedBoardWithCard(t *testing.T, env *cardsEnv, slug string, number int) (st
 
 func attachRepo(t *testing.T, env *cardsEnv, projectID, repo string) {
 	t.Helper()
-	collection, err := env.App.FindCollectionByNameOrId("boards_project_repos")
+	collection, err := env.app.FindCollectionByNameOrId("boards_project_repos")
 	if err != nil {
 		t.Fatalf("boards_project_repos: %v", err)
 	}
 	record := core.NewRecord(collection)
 	record.Set("project", projectID)
 	record.Set("repo", repo)
-	if err := env.App.Save(record); err != nil {
+	if err := env.app.Save(record); err != nil {
 		t.Fatalf("attaching %s: %v", repo, err)
 	}
 }
 
 func findLinks(t *testing.T, env *cardsEnv, cardID string) []*core.Record {
 	t.Helper()
-	links, err := env.App.FindRecordsByFilter(
+	links, err := env.app.FindRecordsByFilter(
 		"boards_pr_links", "card = {:card}", "", 0, 0,
 		map[string]any{"card": cardID},
 	)
@@ -1839,7 +1844,7 @@ func TestGitHubWebhookSource_IgnoresUninterestingEvents(t *testing.T) {
 	// A push delivery decodes to "nothing to do" and must succeed rather than
 	// error: erroring would make the receiver 500, and GitHub would retry an
 	// event we will keep ignoring.
-	err := handleGitHubDelivery(env.App, webhookin.Delivery{
+	err := handleGitHubDelivery(env.app, webhookin.Delivery{
 		Source: "github",
 		Event:  "push",
 		Body:   []byte(`{"ref":"refs/heads/main"}`),
@@ -1852,7 +1857,7 @@ func TestGitHubWebhookSource_IgnoresUninterestingEvents(t *testing.T) {
 func TestGitHubWebhookSource_RejectsMalformedPayload(t *testing.T) {
 	env := setupCardsEnv(t)
 
-	err := handleGitHubDelivery(env.App, webhookin.Delivery{
+	err := handleGitHubDelivery(env.app, webhookin.Delivery{
 		Source: "github",
 		Event:  "pull_request",
 		Body:   []byte(`{not json`),
@@ -1877,7 +1882,7 @@ func TestGitHubWebhookSource_AppliesAPullRequestEvent(t *testing.T) {
 		"repository": { "full_name": "o/r" }
 	}`)
 
-	if err := handleGitHubDelivery(env.App, webhookin.Delivery{
+	if err := handleGitHubDelivery(env.app, webhookin.Delivery{
 		Source: "github", Event: "pull_request", Body: body,
 	}); err != nil {
 		t.Fatalf("handleGitHubDelivery: %v", err)
@@ -2054,38 +2059,38 @@ func TestCardPRStateFilters_FireOnlyOnTheTransition(t *testing.T) {
 	env := setupCardsEnv(t)
 	_, card := seedBoardWithCard(t, env, "OTTER", 20)
 
-	record, err := env.App.FindRecordById("boards_cards", card)
+	record, err := env.app.FindRecordById("boards_cards", card)
 	if err != nil {
 		t.Fatalf("loading the card: %v", err)
 	}
 
 	// none → open fires pr-opened.
 	record.Set("pr_state", "open")
-	if !cardPROpened(env.App, record) {
+	if !cardPROpened(env.app, record) {
 		t.Error("pr-opened did not fire on none → open")
 	}
-	if cardPRMerged(env.App, record) {
+	if cardPRMerged(env.app, record) {
 		t.Error("pr-merged fired on none → open")
 	}
 
 	// Persist so Original() reads `open` on the next change.
-	if err := env.App.Save(record); err != nil {
+	if err := env.app.Save(record); err != nil {
 		t.Fatalf("saving: %v", err)
 	}
-	record, _ = env.App.FindRecordById("boards_cards", card)
+	record, _ = env.app.FindRecordById("boards_cards", card)
 
 	// A same-state re-save must fire nothing.
 	record.Set("pr_state", "open")
-	if cardPROpened(env.App, record) {
+	if cardPROpened(env.app, record) {
 		t.Error("pr-opened fired on a same-state re-save")
 	}
 
 	// open → merged fires pr-merged only.
 	record.Set("pr_state", "merged")
-	if !cardPRMerged(env.App, record) {
+	if !cardPRMerged(env.app, record) {
 		t.Error("pr-merged did not fire on open → merged")
 	}
-	if cardPROpened(env.App, record) {
+	if cardPROpened(env.app, record) {
 		t.Error("pr-opened fired on open → merged")
 	}
 }
@@ -2093,23 +2098,23 @@ func TestCardPRStateFilters_FireOnlyOnTheTransition(t *testing.T) {
 func TestCardPRReviewFilters(t *testing.T) {
 	env := setupCardsEnv(t)
 	_, card := seedBoardWithCard(t, env, "OTTER", 21)
-	record, _ := env.App.FindRecordById("boards_cards", card)
+	record, _ := env.app.FindRecordById("boards_cards", card)
 
 	record.Set("pr_review_state", "in_review")
-	if !cardPRReviewRequested(env.App, record) {
+	if !cardPRReviewRequested(env.app, record) {
 		t.Error("pr-review-requested did not fire on → in_review")
 	}
-	if cardPRApproved(env.App, record) {
+	if cardPRApproved(env.app, record) {
 		t.Error("pr-approved fired on → in_review")
 	}
 
-	if err := env.App.Save(record); err != nil {
+	if err := env.app.Save(record); err != nil {
 		t.Fatalf("saving: %v", err)
 	}
-	record, _ = env.App.FindRecordById("boards_cards", card)
+	record, _ = env.app.FindRecordById("boards_cards", card)
 
 	record.Set("pr_review_state", "approved")
-	if !cardPRApproved(env.App, record) {
+	if !cardPRApproved(env.app, record) {
 		t.Error("pr-approved did not fire on in_review → approved")
 	}
 }
@@ -2413,7 +2418,7 @@ func TestMoveCard_RestampsPRLinkProject(t *testing.T) {
 	target, _ := seedBoardWithCard(t, env, "BADGER", 1)
 	attachRepo(t, env, source, "o/r")
 
-	if err := applyPREvent(env.App, prEvent{
+	if err := applyPREvent(env.app, prEvent{
 		Repo: "o/r", Number: 70, Branch: "OTTER-30-fix", State: "open",
 	}); err != nil {
 		t.Fatalf("linking: %v", err)
