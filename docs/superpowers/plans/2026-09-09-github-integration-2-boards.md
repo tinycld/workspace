@@ -391,7 +391,7 @@ mutable PR text can durably suppress it.
 
 **Files:**
 - Create: `~/code/tinycld/boards/tinycld/boards/lib/pr-key-scan.ts`
-- Create: `~/code/tinycld/boards/tinycld/boards/lib/__tests__/pr-key-scan.test.ts`
+- Create: `~/code/tinycld/boards/tests/pr-key-scan.test.ts`
 - Read for reference: `~/code/tinycld/boards/tinycld/boards/lib/card-key.ts`
 
 **Interfaces:**
@@ -412,7 +412,7 @@ rather than restating them.
 
 - [ ] **Step 2: Write the failing test**
 
-Create `~/code/tinycld/boards/tinycld/boards/lib/__tests__/pr-key-scan.test.ts`:
+Create `~/code/tinycld/boards/tests/pr-key-scan.test.ts`:
 
 ```ts
 import { describe, expect, it } from 'vitest'
@@ -490,7 +490,7 @@ describe('scanSkipDirectives', () => {
 - [ ] **Step 3: Run the test to verify it fails**
 
 ```bash
-cd ~/code/tinycld/boards && pnpm exec vitest run tinycld/boards/lib/__tests__/pr-key-scan.test.ts
+cd ~/code/tinycld/boards && pnpm exec vitest run tests/pr-key-scan.test.ts
 ```
 
 Expected: FAIL — cannot resolve `../pr-key-scan`.
@@ -583,7 +583,7 @@ export function scanSkipDirectives(text: string): ScannedKey[] {
 - [ ] **Step 5: Run the tests to verify they pass**
 
 ```bash
-cd ~/code/tinycld/boards && pnpm exec vitest run tinycld/boards/lib/__tests__/pr-key-scan.test.ts
+cd ~/code/tinycld/boards && pnpm exec vitest run tests/pr-key-scan.test.ts
 ```
 
 Expected: PASS, all tests. If the slug-length cases fail, print
@@ -595,7 +595,7 @@ matched separately.
 
 ```bash
 cd ~/code/tinycld/boards
-git add tinycld/boards/lib/pr-key-scan.ts tinycld/boards/lib/__tests__/pr-key-scan.test.ts
+git add tinycld/boards/lib/pr-key-scan.ts tests/pr-key-scan.test.ts
 git commit -m "feat: scan branch names and PR text for card keys
 
 Boundaries matter more than matches here: an over-matching scan links the
@@ -633,7 +633,7 @@ import "testing"
 
 func TestScanCardKeys_MirrorsTheTSTable(t *testing.T) {
 	// This table MUST stay in step with
-	// tinycld/boards/lib/__tests__/pr-key-scan.test.ts — there is no captured
+	// tests/pr-key-scan.test.ts — there is no captured
 	// fixture holding the two implementations together.
 	for _, tc := range []struct {
 		name string
@@ -2542,7 +2542,7 @@ git commit -m "test: rule-level access proofs for the PR collections"
 **Files:**
 - Create: `~/code/tinycld/boards/tinycld/boards/components/PrLinkChip.tsx`
 - Create: `~/code/tinycld/boards/tinycld/boards/hooks/usePrLinks.ts`
-- Create: `~/code/tinycld/boards/tinycld/boards/components/__tests__/PrLinkChip.test.tsx`
+- Create: `~/code/tinycld/boards/tests/PrLinkChip.test.tsx`
 - Modify: the card detail screen (located in Step 1)
 
 **Interfaces:**
@@ -2563,7 +2563,7 @@ existing analogue (a relation rendered as a labelled pill).
 
 - [ ] **Step 2: Write the failing component test**
 
-Create `~/code/tinycld/boards/tinycld/boards/components/__tests__/PrLinkChip.test.tsx`,
+Create `~/code/tinycld/boards/tests/PrLinkChip.test.tsx`,
 following the render idiom in `tests/unit.helpers.tsx`:
 
 ```tsx
@@ -2610,7 +2610,7 @@ grep -n "export" ~/code/tinycld/boards/tests/unit.helpers.tsx | head -10
 - [ ] **Step 3: Run the test to verify it fails**
 
 ```bash
-cd ~/code/tinycld/boards && pnpm exec vitest run tinycld/boards/components/__tests__/PrLinkChip.test.tsx
+cd ~/code/tinycld/boards && pnpm exec vitest run tests/PrLinkChip.test.tsx
 ```
 
 Expected: FAIL — cannot resolve `../PrLinkChip`.
@@ -2670,7 +2670,7 @@ the epic chip's structure found in Step 1. Requirements:
 - [ ] **Step 6: Run the component test**
 
 ```bash
-cd ~/code/tinycld/boards && pnpm exec vitest run tinycld/boards/components/__tests__/PrLinkChip.test.tsx
+cd ~/code/tinycld/boards && pnpm exec vitest run tests/PrLinkChip.test.tsx
 ```
 
 Expected: PASS.
@@ -2693,7 +2693,7 @@ Expected: PASS.
 
 ```bash
 cd ~/code/tinycld/boards
-git add tinycld/boards/components/PrLinkChip.tsx tinycld/boards/hooks/usePrLinks.ts tinycld/boards/components/__tests__/PrLinkChip.test.tsx
+git add tinycld/boards/components/PrLinkChip.tsx tinycld/boards/hooks/usePrLinks.ts tests/PrLinkChip.test.tsx
 git commit -m "feat: PR link chips on the card"
 ```
 
@@ -2704,7 +2704,7 @@ git commit -m "feat: PR link chips on the card"
 **Files:**
 - Create: `~/code/tinycld/boards/tinycld/boards/hooks/usePrLinkMutations.ts`
 - Create: `~/code/tinycld/boards/tinycld/boards/lib/parse-pr-url.ts`
-- Create: `~/code/tinycld/boards/tinycld/boards/lib/__tests__/parse-pr-url.test.ts`
+- Create: `~/code/tinycld/boards/tests/parse-pr-url.test.ts`
 - Modify: the card detail screen's action menu
 
 **Interfaces:**
@@ -2715,7 +2715,7 @@ git commit -m "feat: PR link chips on the card"
 
 - [ ] **Step 1: Write the failing URL-parser test**
 
-Create `~/code/tinycld/boards/tinycld/boards/lib/__tests__/parse-pr-url.test.ts`:
+Create `~/code/tinycld/boards/tests/parse-pr-url.test.ts`:
 
 ```ts
 import { describe, expect, it } from 'vitest'
@@ -2769,7 +2769,7 @@ describe('parsePrUrl', () => {
 - [ ] **Step 2: Run it to verify it fails**
 
 ```bash
-cd ~/code/tinycld/boards && pnpm exec vitest run tinycld/boards/lib/__tests__/parse-pr-url.test.ts
+cd ~/code/tinycld/boards && pnpm exec vitest run tests/parse-pr-url.test.ts
 ```
 
 Expected: FAIL — cannot resolve `../parse-pr-url`.
@@ -2814,7 +2814,7 @@ export function parsePrUrl(raw: string): { repo: string; number: number } | null
 - [ ] **Step 4: Run the test to verify it passes**
 
 ```bash
-cd ~/code/tinycld/boards && pnpm exec vitest run tinycld/boards/lib/__tests__/parse-pr-url.test.ts
+cd ~/code/tinycld/boards && pnpm exec vitest run tests/parse-pr-url.test.ts
 ```
 
 Expected: PASS, all cases.
@@ -2906,7 +2906,7 @@ Expected: PASS.
 
 ```bash
 cd ~/code/tinycld/boards
-git add tinycld/boards/lib/parse-pr-url.ts tinycld/boards/lib/__tests__/parse-pr-url.test.ts tinycld/boards/hooks/usePrLinkMutations.ts
+git add tinycld/boards/lib/parse-pr-url.ts tests/parse-pr-url.test.ts tinycld/boards/hooks/usePrLinkMutations.ts
 git commit -m "feat: manual PR linking and unlinking
 
 Unlink branches on link_source: a manual link is deleted, a derived one is
