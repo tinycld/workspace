@@ -1615,13 +1615,14 @@ Expected: PASS.
 
 - [ ] **Step 5: Extend the client hook**
 
-In `tinycld/core/lib/use-org-info.ts`, widen `OrgBranding` and `fetchOrgInfo`. Keep the existing comment block explaining the single-org synthetic id:
+In `tinycld/core/lib/use-org-info.ts`, widen `OrgBranding` and `fetchOrgInfo`. Keep the existing comment block explaining the synthetic id.
+
+Note this file has no `slug`, `orgSlug`, or `orgId` — `useOrgInfo` returns `{ org }` only. Add the two logo fields and change nothing else about its shape:
 
 ```ts
 export interface OrgBranding {
     id: string
     name: string
-    slug: string
     logoUrl: string
     logoCrop: string
 }
@@ -1658,12 +1659,11 @@ In `useOrgInfo`, build the org object with the absolute logo URL (the endpoint r
         ? {
               id: 'org',
               name,
-              slug: '',
               logoUrl: logoPath && addr ? `${addr}${logoPath}` : '',
               logoCrop: data?.logoCrop ?? '',
           }
         : null
-    return { orgSlug: '', orgId: '', org }
+    return { org }
 ```
 
 - [ ] **Step 6: Render the logo in OrgLogo**
