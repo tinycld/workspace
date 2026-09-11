@@ -1766,7 +1766,7 @@ export function OrgLogo({ org, size = 36, fallback = null }: OrgLogoProps) {
 }
 ```
 
-The three existing `OrgLogo` call sites (`PackageRail`, `UserMenu`, `MoreDrawer`) pass the org straight from `useOrgInfo`, so they pick this up with no change.
+`PackageRail` is the ONLY remaining `<OrgLogo>` call site — `UserMenu` and `MoreDrawer` dropped it in commit `b8f01c0` ("drop the multi-org client surface"), which predates this plan. It passes the org straight from `useOrgInfo`, so it picks this up with no change.
 
 - [ ] **Step 7: Run core's checks**
 
