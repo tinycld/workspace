@@ -1,8 +1,8 @@
 # Helix Skill — Design
 
-**Status:** implemented at `~/.claude/skills/helix/`; revised after an
+**Status:** implemented at `~/code/tinycld/.claude/skills/helix/` (project-local, like heal-ci and release); revised after an
 adversarial review of the skill files (2026-09-11)
-**Skill location:** `~/.claude/skills/helix/`
+**Skill location:** `~/code/tinycld/.claude/skills/helix/` (project-local, like heal-ci and release)
 
 ## Goal
 
