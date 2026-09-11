@@ -2343,13 +2343,26 @@ export function useOrgBranding() {
 Create `tinycld/core/components/settings/AvatarSection.tsx`. Per the JSX rules, keep state and handlers in a `useAvatarEditor()` hook above the component and keep the returned JSX flat. It must provide:
 
 - The current circle at 96px via `<Avatar>` + `useAvatarUrl(user)`.
-- **Upload photo** → `usePickFiles` (photoLibrary/camera) → `downscaleImage` → open `AvatarCropper` → on commit, `uploadRecordWithFile` for the bytes, then a `useMutation` writing `avatar_crop` via `usersCollection.update`.
+- **Upload photo** → `usePickFiles` (photoLibrary/camera) → `downscaleImage` → open `AvatarCropper` → on commit, upload the bytes, then a `useMutation` writing `avatar_crop` via `usersCollection.update`.
+
+  **The user's avatar is an UPDATE, not a create.** `uploadRecordWithFile` POSTs to `/api/collections/<c>/records` — it creates a new row, which is wrong for a `users` record that already exists. Call `uploadFormDataWithProgress` directly instead, with `method: 'PATCH'` and the record URL:
+
+  ```ts
+  await uploadFormDataWithProgress({
+      url: pb.buildURL(`/api/collections/users/records/${user.id}`),
+      formData,            // FormData with the `avatar` file appended
+      authToken: pb.authStore.token ?? '',
+      method: 'PATCH',
+  })
+  ```
+
+  That helper's own doc comment says "PATCH is what an update-with-file needs". `uploadRecordWithFile` remains correct for `org_branding`'s FIRST insert (no row exists yet); once a branding row exists, that path must PATCH too.
 - **Reposition** (visible only when `user.avatar` is set) → reopens `AvatarCropper` with `parseCrop(user.avatar_crop)`, commits crop only, no re-upload.
 - **Choose emoji** → the existing `EmojiPicker` from `@tinycld/core/ui/emoji-picker`, whose `onPick: (glyph: string) => void` writes `avatar_emoji`.
 - **Color swatches** → `AVATAR_COLORS` rendered like the existing `ColorThemePicker` in `personal.tsx`, writing `avatar_color`.
 - **Remove** → clears `avatar`, `avatar_crop`, `avatar_emoji` in one mutation.
 
-Every field write goes through `useMutation` from `@tinycld/core/lib/mutations`; only the file bytes use `uploadRecordWithFile`. Use `handleMutationErrorsWithForm` or `notify` for failures — never a silent catch.
+Every field write goes through `useMutation` from `@tinycld/core/lib/mutations`; only the file bytes bypass it (via `uploadFormDataWithProgress` / `uploadRecordWithFile`). Use `handleMutationErrorsWithForm` or `notify` for failures — never a silent catch.
 
 - [ ] **Step 3: Mount it in Personal Settings**
 
