@@ -1,6 +1,7 @@
 # Helix Skill — Design
 
-**Status:** approved design, not yet implemented
+**Status:** implemented at `~/.claude/skills/helix/`; revised after an
+adversarial review of the skill files (2026-09-11)
 **Skill location:** `~/.claude/skills/helix/`
 
 ## Goal
@@ -43,14 +44,15 @@ helix/
     dialogue.md         # question discipline + spec self-review
     intake.md           # screenshot decomposition (A-track / C-track)
     mockups.md          # cheap artboards -> fidelity scratch route
-    checkpoints.md      # decomposition + plan format + ledger
-    gates.md            # the three per-checkpoint gates, reviewer mandates,
-                        # deferral rules, stop-the-run conditions
+    checkpoints.md      # decomposition + plan format + plan review
+    gates.md            # the three gates, reviewer mandates, deferral rules, final
+    ledger.md           # the one file read across phases
 ```
 
-The one outward reach is gate 3, which dispatches `pr-review-toolkit` agents.
-Those are agent definitions rather than skill flows, so there is no flow to
-inherit or override.
+Every subagent (implementer, plan reviewer, gate-3 reviewers, fix reviewer)
+is a fresh `general-purpose` agent with a verbatim mandate written in the
+reference files. The `pr-review-toolkit` agents were considered and not used:
+their prompts cannot carry the deferral hunt, which every reviewer needs.
 
 ## Artifacts
 
@@ -60,11 +62,16 @@ All live in the target package's own repo, versioned with the code:
 <package>/docs/specs/<feature>-design.md        # agreed behavior
 <package>/docs/plans/<feature>-checkpoints.md   # the decomposition
 <package>/docs/plans/<feature>-ledger.md        # full run history (retained)
+<package>/docs/plans/<feature>-reference/       # gate-2 reference PNGs (retained)
 <package>/docs/helix-lessons.md                 # durable, capped, carried forward
+<package>/tinycld/<slug>/lib/<feature>-fixture.ts   # synthetic data, imported by seed.ts
 ```
 
-Only the scratch mockup route is deleted before the PR. The ledger is retained —
-it is the detailed run history; the PR is only a summary.
+Deleted before the PR and never staged: the scratch mockup route
+(`tinycld/<slug>/screens/helix-mockup.tsx`) and the capture spec
+(`tests/e2e/helix-capture.spec.ts`). Built (gate-2) screenshots live in the
+session scratchpad, not the repo. The ledger is retained — it is the
+detailed run history; the PR is only a summary.
 
 ## Flow
 
@@ -133,8 +140,16 @@ Before the route is built, a **synthetic fixture** is generated: enough rows to
 show grouping, long values that test truncation, an empty case, and edge cases
 the inventory implies. Written to a real path in the package as a structured
 fixture — not inline in the route — so deleting the route does not take the data
-with it. At the end of the run the skill *offers* to promote it to the package's
-manifest `seed`; seed data ships to real deployments, so it is never assumed.
+with it.
+
+The fixture is also how gate 2 gets data: the real screen reads live queries,
+raw PocketBase writes are banned everywhere, and the e2e stack seeds its DB
+only through each package's `seed.ts`. So the migration checkpoint (or
+checkpoint 1 if there is none) wires the fixture into `seed.ts`. That import
+also keeps the fixture type-checked against the real schema for the life of
+the repo. At the end of the run the human decides whether the seed wiring
+stays (seed data ships to real deployments) or is reverted, leaving the
+fixture as test data.
 
 If the collection schema does not exist yet (likely — migrations are a later
 checkpoint), the fixture is written against the spec's data shape and the
@@ -174,8 +189,13 @@ that says what to do without showing how is a plan failure.
 Self-reviewed against the spec — every requirement maps to a checkpoint, types
 and names are consistent across checkpoints — and fixed inline.
 
-The human approves the checkpoint list. **Then the skill asks once whether to
-insert a mid-run stop:** none, after the first checkpoint that renders
+Before the human sees the plan, one fresh subagent reviews it against the
+spec: the checkpoint text is where scope quietly narrows, and gate-3
+reviewers compare code to the *checkpoint*, so a narrowed checkpoint is
+invisible to them. The human is then shown the plan file path (they may edit
+it directly; the skill re-reads it after approval) plus, per checkpoint, the
+quoted spec bullets and test obligations. **Then the skill asks once whether
+to insert a mid-run stop**, with a computed recommendation: none, after the first checkpoint that renders
 something, or at a named checkpoint. Complex features want one; simple ones do
 not. Asked at this moment because the human has just seen the mockups and the
 decomposition, and so has the best information to judge. It does not ask again;
@@ -199,12 +219,14 @@ and fixed at the source. Never re-run, never bump a timeout, never force serial,
 never skip. If the fix is genuinely out of scope the run stops and surfaces it;
 it does not proceed to gate 2.
 
-**Gate 2 — Visual.** Only where something renders. Playwright drives the running
-app to the real screen with the fixture data, screenshots per breakpoint, and
-compares against the corresponding region of the fidelity reference. Appearance
-only — layout, spacing, type, token usage, light and dark. Reported as a
-judgment rather than a pixel score, since the reference is a mockup and some
-divergence is correct. The skill states what differs and whether it matters.
+**Gate 2 — Visual.** Only where something renders. A capture spec (guarded by
+an env var so ordinary suites skip it) runs through the package's own e2e
+stack — whose seeded DB now carries the fixture — and screenshots the built
+screen per state, width, and color scheme. The built set must match the
+reference set's file count. Comparison is a judgment rather than a pixel
+score, since the reference is a mockup and some divergence is correct, but
+the ledger records one concrete observation per screenshot pair — never a
+blanket "minor differences". Appearance only.
 
 **Gate 3 — Two adversarial reviewers**, dispatched in parallel with deliberately
 different mandates, neither seeing the other's findings:
@@ -213,9 +235,20 @@ different mandates, neither seeing the other's findings:
   raw PocketBase, no cross-package imports, no `useState`/`useEffect` where a
   better primitive exists, no biome-ignore comments)
 
-Both also run the **deferral hunt** (below). Findings are triaged by the skill
-rather than applied blindly; a wrong finding is rebutted in the ledger with
-reasoning.
+Reviewer B also hunts web-only APIs (no gate executes native, and the final
+review says so outright), migration access rules and immutability, core
+isolation for checkpoint 0, and help-body accuracy. Reviewer A maps every
+test obligation to an assertion that would fail if the behavior broke. Both
+run the **deferral hunt** (below) and flag any file the checkpoint's Files
+block did not name. Reviewers see the staged diff of exactly this
+checkpoint's work.
+
+Findings are triaged by the skill rather than applied blindly. A rebuttal must
+quote the spec, the checkpoint, the code, or a codebase rule; a rebuttal of a
+deferral finding must quote the checkpoint text showing the thing was never
+asked for. **Every rebuttal is shown to the human at the end.** Any fix that
+touches non-test source gets one fresh reviewer-A pass over the fix diff —
+a bright line, not a judgment call.
 
 Gate 3 does not adapt or weaken. With human approval moved to the end there is
 no per-checkpoint signal to learn from, and two reviewers every checkpoint is
@@ -225,11 +258,13 @@ Then commit — one per checkpoint — update the ledger, and start the next. If
 this checkpoint is the agreed mid-run stop, present what has been built so far
 and wait; otherwise continue unattended.
 
-**When the run stops** — a gate cannot be passed, or an out-of-scope fix is
-required — committed checkpoints stay committed, the incomplete checkpoint's
-work is left in the working tree rather than committed or discarded, and the
-ledger records why. The human decides whether to resume, revise the spec, or
-abandon. The skill never reaches the end by lowering a bar.
+**When the run stops** — a gate cannot be passed, an out-of-scope fix is
+required, or a deferral needs a human decision — committed checkpoints stay
+committed, the ledger records why and is committed alone, and the incomplete
+checkpoint's work is left in the working tree rather than committed or
+discarded. The human decides whether to resume, revise the spec, or abandon;
+a resume hands the next implementer the in-progress diff and needs no
+screenshot. The skill never reaches the end by lowering a bar.
 
 ### Deferrals
 
@@ -237,8 +272,11 @@ A deferral is anything agreed in the spec or checkpoint that was not built as
 specified: a stubbed function, a skipped edge case, a simplified query, a test
 asserting less than required, a TODO.
 
-Deferrals are permitted only for genuine blockers — a missing upstream
-dependency, a decision only the human can make. **Difficulty is never a reason.**
+Deferrals are permitted only for genuine blockers. A missing upstream
+dependency may remain a deferral while the run continues; a decision only the
+human can make **stops the run**, because building further checkpoints on a
+guess is the one failure the mid-run stop cannot catch. **Difficulty is never
+a reason.**
 An implementer that finds a checkpoint hard implements it anyway or stops the
 run. This is stated plainly in the implementer's instructions, because
 implementers (like humans) will otherwise route around hard problems.
@@ -255,13 +293,18 @@ They are tracked as first-class findings:
 
 ### 6. Final review and PR
 
-One presentation, at the end:
+After cleanup and the package's full e2e suite, one presentation:
 - **deferrals first and prominent**, with reasoning. A clean run states "no
   deferrals" explicitly, so the absence is informative.
+- every rebuttal, verbatim; every out-of-plan file change
+- "native: not executed in this run"
 - what was built, per-checkpoint gate results, full visual comparison
+- approve / corrections / abandon
 
-Then: scratch route deleted, fixture promotion to seed data offered, lessons
-distilled, PR opened against the package repo. Short description per user
+Then, after approval: lessons distilled (from the ledger *and* the human's
+comments — so they are written after the review, not before), the seed
+keep-or-revert decision with its consequence stated, PR opened against the
+package repo. Short description per user
 preference — what the feature does, plus the deferral list. No Claude
 attribution, no session links.
 
@@ -276,5 +319,9 @@ a run from its findings plus the human's final-review comments.
 
 Package-scoped, not ecosystem-wide: the global CLAUDE.md already serves as the
 ecosystem lessons file, and a second competing one would drift from it.
-**Capped** — the skill prunes and rewrites rather than appending forever, since
-an unbounded lessons file reproduces the problem it solves.
+**Capped** at 30 lines — the skill prunes rather than appending forever, since
+an unbounded lessons file reproduces the problem it solves. Pruning order:
+lines the code or CLAUDE.md now state on their own, then rebuttal-derived
+lines, then lines no run has needed since. Human corrections are never
+dropped to keep a reviewer nit. Rebuttals become lessons only after the
+human has seen and not overturned them.
