@@ -47,7 +47,19 @@ helix/
     checkpoints.md      # decomposition + plan format + plan review
     gates.md            # the three gates, reviewer mandates, deferral rules, final
     ledger.md           # the one file read across phases
+  scripts/
+    plan-check.mjs      # spec→plan coverage, placeholders, interface names (exit 1 on errors)
+    review-diff.mjs     # stage, list out-of-plan files, emit the staged diff for gate 3
+    finish.mjs          # phase-6 cleanup + full check + full e2e, first failure stops
+  templates/
+    helix-capture.spec.ts   # manifest-driven screenshot grid, copied into the package per run
 ```
+
+The scripts are dependency-free Node and exist for repeatability: each
+replaces a step that is mechanical, repeated every run, and would otherwise
+be done slightly differently each time. Nothing lands in any tinycld repo
+permanently; the capture spec is copied into the target package for the
+run and removed at the end.
 
 Every subagent (implementer, plan reviewer, gate-3 reviewers, fix reviewer)
 is a fresh `general-purpose` agent with a verbatim mandate written in the
@@ -67,10 +79,13 @@ All live in the target package's own repo, versioned with the code:
 <package>/tinycld/<slug>/lib/<feature>-fixture.ts   # synthetic data, imported by seed.ts
 ```
 
-Deleted before the PR and never staged: the scratch mockup route
+Two scratch files exist only for the run: the mockup route
 (`tinycld/<slug>/screens/helix-mockup.tsx`) and the capture spec
-(`tests/e2e/helix-capture.spec.ts`). Built (gate-2) screenshots live in the
-session scratchpad, not the repo. The ledger is retained — it is the
+(`tests/e2e/helix-capture.spec.ts`, copied from the skill's templates). Both
+are added to the package's `.git/info/exclude` at branch creation so
+`git add -A` is safe throughout, and `finish.mjs` deletes them. The reference
+capture manifest (`docs/plans/<feature>-capture.json`) is retained with the
+reference PNGs; built (gate-2) screenshots live in the session scratchpad. The ledger is retained — it is the
 detailed run history; the PR is only a summary.
 
 ## Flow
@@ -189,8 +204,10 @@ that says what to do without showing how is a plan failure.
 Self-reviewed against the spec — every requirement maps to a checkpoint, types
 and names are consistent across checkpoints — and fixed inline.
 
-Before the human sees the plan, one fresh subagent reviews it against the
-spec: the checkpoint text is where scope quietly narrows, and gate-3
+Before the human sees the plan, `plan-check.mjs` must exit clean (verbatim
+coverage of every Behavior bullet, no Cut item present, no placeholders,
+required blocks, interface names) and then one fresh subagent reviews it
+against the spec: the checkpoint text is where scope quietly narrows, and gate-3
 reviewers compare code to the *checkpoint*, so a narrowed checkpoint is
 invisible to them. The human is then shown the plan file path (they may edit
 it directly; the skill re-reads it after approval) plus, per checkpoint, the
@@ -219,9 +236,10 @@ and fixed at the source. Never re-run, never bump a timeout, never force serial,
 never skip. If the fix is genuinely out of scope the run stops and surfaces it;
 it does not proceed to gate 2.
 
-**Gate 2 — Visual.** Only where something renders. A capture spec (guarded by
-an env var so ordinary suites skip it) runs through the package's own e2e
-stack — whose seeded DB now carries the fixture — and screenshots the built
+**Gate 2 — Visual.** Only where something renders. The capture spec (guarded
+by `HELIX_CAPTURE=<manifest.json>` so ordinary suites skip it; driven by a
+JSON manifest of shots so nothing is hand-written per checkpoint) runs
+through the package's own e2e stack — whose seeded DB now carries the fixture — and screenshots the built
 screen per state, width, and color scheme. The built set must match the
 reference set's file count. Comparison is a judgment rather than a pixel
 score, since the reference is a mockup and some divergence is correct, but
@@ -241,7 +259,8 @@ isolation for checkpoint 0, and help-body accuracy. Reviewer A maps every
 test obligation to an assertion that would fail if the behavior broke. Both
 run the **deferral hunt** (below) and flag any file the checkpoint's Files
 block did not name. Reviewers see the staged diff of exactly this
-checkpoint's work.
+checkpoint's work, assembled by `review-diff.mjs`, which also lists the
+out-of-plan files for them.
 
 Findings are triaged by the skill rather than applied blindly. A rebuttal must
 quote the spec, the checkpoint, the code, or a codebase rule; a rebuttal of a
@@ -293,7 +312,8 @@ They are tracked as first-class findings:
 
 ### 6. Final review and PR
 
-After cleanup and the package's full e2e suite, one presentation:
+After `finish.mjs` (scratch files removed, routes regenerated, nothing
+references them, lessons capped, full check, full e2e), one presentation:
 - **deferrals first and prominent**, with reasoning. A clean run states "no
   deferrals" explicitly, so the absence is informative.
 - every rebuttal, verbatim; every out-of-plan file change
