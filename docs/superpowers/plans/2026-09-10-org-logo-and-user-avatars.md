@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - **Branch name:** `feat/org-and-user-avatars` — the **same name in every repo** (tinycld, boards, contacts, mail, drive, calendar) so package builds resolve core. **Core merges first**, packages follow.
-- **No new npm dependencies.** `react-native-gesture-handler` and `react-native-reanimated` are already pinned in `tinycld/core/package-versions.json` and already used by core's drawer/sheet/swipe primitives.
+- **One approved new dependency: `expo-image-manipulator@55.0.21`** (human decision, 2026-09-10) — it gives native a real downscale instead of leaning on the shared picker's `quality`, which would have changed behavior for every picker in the app. Pinned in `tinycld/core/package-versions.json`, peer-dep in `core/package.json`, dependency in the app shell. **No OTHER new npm dependency.** `react-native-gesture-handler` and `react-native-reanimated` were already pinned and are already used by core's drawer/sheet/swipe primitives.
 - **Both platforms.** Every feature must work on web and native. Web is the majority of users.
 - **Never use `any`.** Never add `biome-ignore` comments — fix the underlying issue.
 - **Never `console.*` in runtime code** — use `log` from `@tinycld/core/lib/logger` (client) or `logging.ForPackage` (Go).
@@ -1905,7 +1905,11 @@ export async function downscaleImage(
 }
 ```
 
-If `expo-image-manipulator` is not already a dependency, do **not** add it — the Global Constraints forbid new dependencies. Instead pass `allowsEditing: false` and rely on `expo-image-picker`'s `quality: 0.85` at the pick site in Task 12, and have `downscaleImage` on native return its input unchanged with a comment saying the web path does the real work and native relies on the picker's own compression.
+**`expo-image-manipulator` is an approved addition to this plan** (human decision, 2026-09-10), pinned at `55.0.21` to match Expo SDK 55. It is declared in `tinycld/core/package-versions.json` (the single source of truth for vendor pins), as a `peerDependency` in `core/package.json`, and as a `dependency` in the app shell's `package.json` — the pattern every other Expo module in this repo follows.
+
+This supersedes the earlier no-new-dependencies fallback, under which native `downscaleImage` was an identity passthrough and the only native size cap came from lowering `expo-image-picker`'s shared `quality`. That fallback was rejected because it changed behavior for every picker in the app — mail and boards attachments included — to solve an avatar-only problem. **Leave `use-pick-files.tsx` at `quality: 1`.**
+
+Native `downscaleImage` therefore does real work: measure the source, cap the longer edge at `MAX_AVATAR_EDGE`, and re-encode (PNG keeps alpha, everything else becomes JPEG at `JPEG_QUALITY`). Pass only ONE dimension to `resize` — the library derives the other to preserve aspect ratio, and passing both would stretch the image.
 
 - [ ] **Step 4: Write the web implementation**
 
@@ -2479,14 +2483,39 @@ test('an uploaded photo replaces the initials circle', async ({ page }) => {
     await page.getByRole('button', { name: 'Settings' }).click()
     await page.getByText('Personal').click()
 
-    await page.setInputFiles('input[type="file"]', 'tests/e2e/fixtures/avatar.png')
+    await attachAvatar(page, {
+        name: 'avatar.png',
+        mimeType: 'image/png',
+        buffer: Buffer.from(PNG_BASE64, 'base64'),
+    })
     await page.getByTestId('avatar-cropper-save').click()
 
     await expect(page.getByTestId('avatar-preview-image')).toBeVisible()
 })
 ```
 
-Add the `avatar-preview` / `avatar-choose-emoji` testIDs to `AvatarSection` in Task 12's component if they aren't already there, and create a small `tinycld/tests/e2e/fixtures/avatar.png` (any valid PNG, ≤100KB).
+**Do NOT use `page.setInputFiles`, and do NOT create a fixtures directory.** Both were wrong in an earlier draft of this plan. The picker builds a hidden `<input>` programmatically, so the established pattern in this ecosystem is to intercept the file chooser. Copy it from `boards/tests/e2e/card-attachments.spec.ts` (`attachFile`) — it is load-bearing and hard-won:
+
+```ts
+const chooserPromise = page.waitForEvent('filechooser')
+await /* click the upload control */
+const chooser = await chooserPromise
+// Playwright's chooser interception suppresses the native dialog, and with it
+// the window blur → focus round trip a real dialog causes. The picker runs
+// inside that round trip for every real user, so restore it.
+await page.evaluate(() => window.dispatchEvent(new Event('blur')))
+await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+// Wait for the renderer to go idle rather than sleeping — a wall-clock sleep
+// is both slower than needed and flaky under load.
+await page.evaluate(
+    () => new Promise<void>(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)))
+)
+await chooser.setFiles(file)
+```
+
+The file is passed in memory as `{ name, mimeType, buffer }` — no fixture file on disk. Use a real 1×1 PNG in base64, as `boards/tests/e2e/card-description-images.spec.ts` does (its comment notes the bytes must actually decode, which is true here too since the cropper decodes the image).
+
+Add the `avatar-preview` / `avatar-choose-emoji` testIDs to `AvatarSection` in Task 12's component if they aren't already there.
 
 - [ ] **Step 3: Run the e2e**
 
