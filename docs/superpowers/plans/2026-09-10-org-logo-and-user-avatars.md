@@ -21,6 +21,7 @@
 - **Avoid `useState`/`useEffect`.** Use `useForm` for forms, live queries for data, `useMutation` for writes, Zustand for shared UI state. `useState` only for genuinely local synchronous UI state.
 - **Keep JSX minimal.** No complex ternaries, `.map()`, or calculations inside a return. Conditional visibility uses an `isVisible` prop that returns `null`, not `{cond && <X/>}`.
 - **Migrations:** unreleased migrations may be edited in place; a released version's are immutable. New migration files go in `tinycld/core/server/pb_migrations/` with a numeric prefix above the current maximum (`2010000000_prefix_notification_urls.js`).
+- **Initials text metrics are `fontSize: size * 0.42`, `fontWeight: '600'`, no `letterSpacing`** — `NameAvatar`'s original values, for EVERY palette and shape. This is a deliberate ruling (2026-09-10): the first implementation hardcoded `MemberAvatar`'s `0.36`/`700`/`letterSpacing 0.2` for all variants, which silently shrank initials ~14% and bolded them at the ~20 former `NameAvatar` sites. Standardizing on `0.42`/`600` instead changes only the 4 former `MemberAvatar` sites (Members drawer, Members screen, Calendar sharing ×2). **There are therefore TWO sanctioned visual changes in this refactor**, not one: (a) one-letter initials become two letters, and (b) the four soft-palette sites get slightly larger, lighter initials. Any other rendering difference from the deleted components is a regression.
 - **Crop rect shape** (verbatim, used across every task): `{ x: number, y: number, zoom: number }` where `x`/`y` are the focal point as fractions of source dimensions in `[0,1]` and `zoom >= 1` is the scale factor relative to cover-fit. Stored as a JSON string. Absent/invalid = `{ x: 0.5, y: 0.5, zoom: 1 }` (center-cover).
 - **Max upload edge:** 1024px. **JPEG quality:** 0.85. **Served thumb size:** 256.
 - **Component tests use `@testing-library/react` under happy-dom**, never `@testing-library/react-native` (not installed, and adding it is forbidden). Start each component test file with `// @vitest-environment happy-dom`, import `{ cleanup, fireEvent, render }` from `@testing-library/react`, query with `container.querySelector('[testid="…"]')`, and assert on `.style` / `.textContent` / `.getAttribute()`. There is **no jest-dom**, so `toHaveStyle`, `toBeVisible`, and `toBeInTheDocument` do not exist — use plain vitest matchers. react-native-web renders RN views to DOM nodes and emits colors as `rgb(...)` and lengths as `px` strings. Reference: `tinycld/core/tests/unit/toast-placement.test.tsx`.
@@ -714,9 +715,8 @@ function AvatarContent({
         <Text
             style={{
                 color: foregroundColor,
-                fontWeight: '700',
-                fontSize: size * 0.36,
-                letterSpacing: 0.2,
+                fontWeight: '600',
+                fontSize: size * 0.42,
             }}
         >
             {resolveInitials(name, email)}
@@ -925,7 +925,7 @@ git commit -m "feat(core): add AvatarStack for overlapping avatar rows"
 - Consumes: `Avatar` (Task 2), `AvatarStack` (Task 3).
 - Produces: no new exports. `PresenceAvatars` keeps its existing public signature `({ awareness, max?, size? })` — two packages depend on it.
 
-This task is presentation-parity only: no stored avatars yet. The one intended visual change is two-letter initials where `NameAvatar` showed one.
+This task is presentation-parity only: no stored avatars yet. The two intended visual changes are (a) two-letter initials where `NameAvatar` showed one, and (b) the four former `MemberAvatar` sites adopting `NameAvatar`'s slightly larger, lighter initials (`0.42`/`600`, no letter-spacing) — see Global Constraints. Everything else must render identically to the deleted components.
 
 - [ ] **Step 1: Replace PresenceAvatars' inner circle with AvatarStack**
 
