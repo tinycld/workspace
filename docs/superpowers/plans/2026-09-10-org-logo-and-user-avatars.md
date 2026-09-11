@@ -2165,6 +2165,14 @@ export function AvatarCropper({
     const panStart = useRef<CropRect>(crop)
     const foregroundColor = useThemeColor('foreground')
 
+    // Gesture callbacks run on the UI thread. Crossing back to JS on every
+    // frame would thrash React state, so the handlers mutate a ref-like
+    // snapshot and commit through `runOnJS` only at gesture end — the pattern
+    // `core/ui/sheet/index.tsx` uses (import `runOnJS` from
+    // react-native-reanimated; do NOT use a `.runOnJS(true)` builder method,
+    // which is not this version's API).
+    const commit = (next: CropRect) => setCrop(clampCrop(next))
+
     const panGesture = Gesture.Pan()
         .onBegin(() => {
             panStart.current = crop
@@ -2172,21 +2180,16 @@ export function AvatarCropper({
         .onUpdate(event => {
             // Dragging the image right moves the focal point left.
             const travel = size * (crop.zoom - 1) || size
-            setCrop(
-                clampCrop({
-                    x: panStart.current.x - event.translationX / travel,
-                    y: panStart.current.y - event.translationY / travel,
-                    zoom: panStart.current.zoom,
-                })
-            )
+            runOnJS(commit)({
+                x: panStart.current.x - event.translationX / travel,
+                y: panStart.current.y - event.translationY / travel,
+                zoom: panStart.current.zoom,
+            })
         })
-        .runOnJS(true)
 
-    const pinchGesture = Gesture.Pinch()
-        .onUpdate(event => {
-            setCrop(current => clampCrop({ ...current, zoom: current.zoom * event.scale }))
-        })
-        .runOnJS(true)
+    const pinchGesture = Gesture.Pinch().onUpdate(event => {
+        runOnJS(commit)({ ...crop, zoom: crop.zoom * event.scale })
+    })
 
     const transform = cropToTransform(crop, size)
 
