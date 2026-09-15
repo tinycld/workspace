@@ -15,8 +15,11 @@
         "calc",
         "text",
         "google-takeout-import",
+        "boards",
         "search-alpha",
-        "search-beta"
+        "search-beta",
+        "shortcut-stub",
+        "hosting/ui"
     ],
     "//postinstall": "link-members runs FIRST so the @tinycld/<member> symlinks (notably @tinycld/core) exist before the generator's package-build step (gen-build.ts runPackageBuilds) — text's webview-editor build.ts does a bare `import '@tinycld/core/...'` resolved by package name, which fails on a CLEAN install (fresh container) if the symlink isn't there yet. It then runs again AFTER generate to add the @tinycld/app-generated link (whose target, tinycld/lib/generated, only exists once generate has run); link-members is idempotent and skips app-generated when absent, so the first pass is harmless and the second completes the graph.",
     "scripts": {
@@ -27,5 +30,5 @@
     "devDependencies": {
         "tsx": "^4.21.0"
     },
-    "packageManager": "pnpm@11.3.0+sha512.2c403d6594527287672b1f7056343a1f7c3634036a67ffabfcc2b3d7595d843768f8787148d1b57cf7956c90606bbd192857c363af19e96d2d0ec9ec5741d215"
+    "packageManager": "pnpm@11.3.0"
 }
