@@ -9,7 +9,6 @@ overrides:
   '@sentry/react-native': 7.11.0
   '@shopify/flash-list': 2.0.2
   '@tanstack/db': 0.8.5
-  '@tanstack/query-db-collection': 1.2.10
   '@tanstack/react-db': 0.3.5
   '@tanstack/react-query': 5.101.0
   expo: 55.0.26
@@ -21,7 +20,7 @@ overrides:
   react-dom: 19.2.0
   react-hook-form: 7.77.0
   react-native: 0.83.6
-  react-native-drax: github:nathanstitt/react-native-drax#bc83061aceb7eae462cecc4756b3a4c81dcd1d30
+  react-native-drax: github:nathanstitt/react-native-drax#eccc8b6f7f453882dc38182f59b76c46587b67ff
   react-native-gesture-handler: 3.0.1
   react-native-reanimated: 4.2.1
   react-native-safe-area-context: 5.6.2
@@ -41,6 +40,16 @@ importers:
       tsx:
         specifier: ^4.21.0
         version: 4.22.4
+
+  boards:
+    dependencies:
+      fractional-indexing:
+        specifier: '>=3.2.0 <4'
+        version: 3.2.0
+    devDependencies:
+      '@tinycld/package-scripts':
+        specifier: '*'
+        version: link:../tinycld/package-scripts
 
   calc:
     dependencies:
@@ -65,16 +74,6 @@ importers:
         version: link:../tinycld/package-scripts
 
   calendar:
-    devDependencies:
-      '@tinycld/package-scripts':
-        specifier: '*'
-        version: link:../tinycld/package-scripts
-
-  cards:
-    dependencies:
-      fractional-indexing:
-        specifier: '>=3.2.0 <4'
-        version: 3.2.0
     devDependencies:
       '@tinycld/package-scripts':
         specifier: '*'
@@ -128,22 +127,6 @@ importers:
         version: link:../tinycld/package-scripts
 
   search-beta:
-    dependencies:
-      expo-router:
-        specifier: 55.0.16
-        version: 55.0.16(e769c134d522371abeb339b6011ebbaf)
-      react:
-        specifier: 19.2.0
-        version: 19.2.0
-      react-native:
-        specifier: 0.83.6
-        version: 0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3)(@types/react@19.2.17)(react@19.2.0)
-    devDependencies:
-      '@tinycld/package-scripts':
-        specifier: '*'
-        version: link:../tinycld/package-scripts
-
-  shortcut-stub:
     dependencies:
       expo-router:
         specifier: 55.0.16
@@ -240,9 +223,6 @@ importers:
 
   tinycld:
     dependencies:
-      '@10play/tentap-editor':
-        specifier: ^1.0.1
-        version: 1.0.1(@floating-ui/dom@1.7.6)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-native-webview@13.16.0(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)
       '@expo/html-elements':
         specifier: ^0.12.5
         version: 0.12.5
@@ -346,7 +326,7 @@ importers:
         specifier: 0.8.5
         version: 0.8.5(typescript@5.9.3)
       '@tanstack/query-db-collection':
-        specifier: 1.2.10
+        specifier: ^1.0.36
         version: 1.2.10(@tanstack/query-core@5.101.0)(typescript@5.9.3)
       '@tanstack/react-db':
         specifier: 0.3.5
@@ -477,6 +457,9 @@ importers:
       expo-image:
         specifier: 55.0.11
         version: 55.0.11(expo@55.0.26)(react-native-web@0.21.2(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)
+      expo-image-manipulator:
+        specifier: ~55.0.21
+        version: 55.0.21(expo@55.0.26)
       expo-image-picker:
         specifier: 55.0.20
         version: 55.0.20(expo@55.0.26)
@@ -526,8 +509,8 @@ importers:
         specifier: ^3.2.6
         version: 3.2.6
       pbtsdb:
-        specifier: ^0.7.2
-        version: 0.7.2(@tanstack/db@0.8.5(typescript@5.9.3))(@tanstack/query-db-collection@1.2.10(@tanstack/query-core@5.101.0)(typescript@5.9.3))(@tanstack/react-db@0.3.5(react@19.2.0)(typescript@5.9.3))(@tanstack/react-query@5.101.0(react@19.2.0))(pocketbase@0.26.9)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+        specifier: ^0.9.3
+        version: 0.9.3(@tanstack/db@0.8.5(typescript@5.9.3))(@tanstack/query-db-collection@1.2.10(@tanstack/query-core@5.101.0)(typescript@5.9.3))(@tanstack/react-db@0.3.5(react@19.2.0)(typescript@5.9.3))(@tanstack/react-query@5.101.0(react@19.2.0))(pocketbase@0.26.9)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       pocketbase:
         specifier: ^0.26.8
         version: 0.26.9
@@ -583,8 +566,8 @@ importers:
         specifier: ^0.24.7
         version: 0.24.9(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)
       react-native-drax:
-        specifier: github:nathanstitt/react-native-drax#bc83061aceb7eae462cecc4756b3a4c81dcd1d30
-        version: https://codeload.github.com/nathanstitt/react-native-drax/tar.gz/bc83061aceb7eae462cecc4756b3a4c81dcd1d30(react-native-gesture-handler@3.0.1(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native-reanimated@4.2.1(react-native-worklets@0.7.4(@babel/core@7.29.7)(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)
+        specifier: github:nathanstitt/react-native-drax#eccc8b6f7f453882dc38182f59b76c46587b67ff
+        version: https://codeload.github.com/nathanstitt/react-native-drax/tar.gz/eccc8b6f7f453882dc38182f59b76c46587b67ff(react-native-gesture-handler@3.0.1(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native-reanimated@4.2.1(react-native-worklets@0.7.4(@babel/core@7.29.7)(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)
       react-native-external-keyboard:
         specifier: ^0.8.4
         version: 0.8.5(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)
@@ -721,9 +704,6 @@ importers:
 
   tinycld/core:
     dependencies:
-      '@10play/tentap-editor':
-        specifier: ^1.0.1
-        version: 1.0.1(@floating-ui/dom@1.7.6)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-native-webview@13.16.0(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)
       '@expo/html-elements':
         specifier: ^0.12.5
         version: 0.12.5
@@ -751,6 +731,9 @@ importers:
       '@sentry/react-native':
         specifier: 7.11.0
         version: 7.11.0(expo@55.0.26)(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)
+      '@shopify/flash-list':
+        specifier: 2.0.2
+        version: 2.0.2(@babel/runtime@7.29.7)(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)
       '@tanstack/db':
         specifier: 0.8.5
         version: 0.8.5(typescript@5.9.3)
@@ -817,6 +800,9 @@ importers:
       expo-image:
         specifier: 55.0.11
         version: 55.0.11(expo@55.0.26)(react-native-web@0.21.2(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)
+      expo-image-manipulator:
+        specifier: ~55.0.21
+        version: 55.0.21(expo@55.0.26)
       expo-image-picker:
         specifier: 55.0.20
         version: 55.0.20(expo@55.0.26)
@@ -833,8 +819,8 @@ importers:
         specifier: 1.17.0
         version: 1.17.0(react-native-svg@15.15.3(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)
       pbtsdb:
-        specifier: '>=0.6.3'
-        version: 0.7.2(@tanstack/db@0.8.5(typescript@5.9.3))(@tanstack/query-db-collection@1.2.10(@tanstack/query-core@5.101.0)(typescript@5.9.3))(@tanstack/react-db@0.3.5(react@19.2.0)(typescript@5.9.3))(@tanstack/react-query@5.101.0(react@19.2.0))(pocketbase@0.26.9)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+        specifier: '>=0.9.3'
+        version: 0.9.3(@tanstack/db@0.8.5(typescript@5.9.3))(@tanstack/query-db-collection@1.2.10(@tanstack/query-core@5.101.0)(typescript@5.9.3))(@tanstack/react-db@0.3.5(react@19.2.0)(typescript@5.9.3))(@tanstack/react-query@5.101.0(react@19.2.0))(pocketbase@0.26.9)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       pocketbase:
         specifier: ^0.26.8
         version: 0.26.9
@@ -851,8 +837,8 @@ importers:
         specifier: 0.83.6
         version: 0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0)
       react-native-drax:
-        specifier: github:nathanstitt/react-native-drax#bc83061aceb7eae462cecc4756b3a4c81dcd1d30
-        version: https://codeload.github.com/nathanstitt/react-native-drax/tar.gz/bc83061aceb7eae462cecc4756b3a4c81dcd1d30(react-native-gesture-handler@3.0.1(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native-reanimated@4.2.1(react-native-worklets@0.7.4(@babel/core@7.29.7)(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)
+        specifier: github:nathanstitt/react-native-drax#eccc8b6f7f453882dc38182f59b76c46587b67ff
+        version: https://codeload.github.com/nathanstitt/react-native-drax/tar.gz/eccc8b6f7f453882dc38182f59b76c46587b67ff(react-native-gesture-handler@3.0.1(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native-reanimated@4.2.1(react-native-worklets@0.7.4(@babel/core@7.29.7)(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)
       react-native-external-keyboard:
         specifier: ^0.8.4
         version: 0.8.5(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)
@@ -922,14 +908,6 @@ importers:
         version: 4.22.4
 
 packages:
-
-  '@10play/tentap-editor@1.0.1':
-    resolution: {integrity: sha512-tqBN0gqSxku50jk50e+rnB4DQdubRTdbgBrkMu7XE3kvHSbavCB5zJgrFjNhnU9A9dVRcBoEtZk3YJFnfDm9Ug==}
-    engines: {node: '>= 18.0.0'}
-    peerDependencies:
-      react: 19.2.0
-      react-native: 0.83.6
-      react-native-webview: '*'
 
   '@babel/code-frame@7.10.4':
     resolution: {integrity: sha512-vG6SvB6oYEhvgisZNFRmRCUkLz11c7rp+tbNTynGqc6mS1d5ATd/sGyV6W0KZZnXRKMTzZDRgQT3Ou9jhpAfUg==}
@@ -3314,11 +3292,6 @@ packages:
     peerDependencies:
       '@tiptap/core': 3.29.2
 
-  '@tiptap/extension-highlight@3.26.0':
-    resolution: {integrity: sha512-/b6pImBTdgOc8UVMJiJNQ/QAtZ0Z4+2XyxmzoNIiOPGjQDy/IxLtci8+M2BYWRIRbgjCS9XllsfnKWVyO8pe+w==}
-    peerDependencies:
-      '@tiptap/core': 3.26.0
-
   '@tiptap/extension-horizontal-rule@3.29.2':
     resolution: {integrity: sha512-8/ZPzbB9X85Mc9/7xVLZupQKBr2UVcQTGr512xtqMW+XkCQRHCph46tRo828YE13IMWI5fWn/FaNCqXG9cULSw==}
     peerDependencies:
@@ -4435,6 +4408,11 @@ packages:
     peerDependencies:
       expo: 55.0.26
 
+  expo-image-manipulator@55.0.21:
+    resolution: {integrity: sha512-BlVl692hVDKuWzOCnbUsfp1u0XqujOABm/Kv3ISMg0qRMchvD6vUSJ/XOIj80+6B9CCm1hNgklgeJ0SIEHiCVQ==}
+    peerDependencies:
+      expo: 55.0.26
+
   expo-image-picker@55.0.20:
     resolution: {integrity: sha512-lfWt/0rPWdKz8AdDEGmGHZIJSNlVc720Dlx5bfou10FU16ZV5wAbTU63nm2jkXd8hbXke4a/2Ha1dzxCVA+LQQ==}
     peerDependencies:
@@ -5314,9 +5292,6 @@ packages:
   lodash.throttle@4.1.1:
     resolution: {integrity: sha512-wIkUCfVKpVsWo3JSZlc+8MB5it+2AN5W8J7YVMST30UrvcQNZ1Okbj+rbVniijTWE6FGYy4XJq/rHkas8qJMLQ==}
 
-  lodash@4.18.1:
-    resolution: {integrity: sha512-dMInicTPVE8d1e5otfwmmjlxkZoUpiVLwyeTdUsi/Caj/gfzzblBcCE5sRHV/AsjuCmxWrte2TNGSYuCeCq+0Q==}
-
   log-symbols@2.2.0:
     resolution: {integrity: sha512-VeIAFslyIerEJLXHziedo2basKbMKtTw3vfn5IzG0XTjhAVEJyNHnL2p7vc+wBDSdQuUpNw3M2u6xb9QsAY5Eg==}
     engines: {node: '>=4'}
@@ -5788,11 +5763,11 @@ packages:
     resolution: {integrity: sha512-//nshmD55c46FuFw26xV/xFAaB5HF9Xdap7HJBBnrKdAd6/GxDBaNA1870O79+9ueg61cZLSVc+OaFlfmObYVQ==}
     engines: {node: '>= 14.16'}
 
-  pbtsdb@0.7.2:
-    resolution: {integrity: sha512-/1/HlDU35Mgy1/zUQsb5iGaxZT5zrTjOuvTunla6hdkAlGOERv60czOaly9GUxMVY/q0fD0EE3JofqkyRjFwGQ==}
+  pbtsdb@0.9.3:
+    resolution: {integrity: sha512-uKB0r7uauMcHsbHcmlC7vyjfU7siA3IZ7c8Xr7r74ndHgq3SkGNZYdx7yjXItIZNGcfKNAj0JMhccE9bFaC2kw==}
     peerDependencies:
       '@tanstack/db': 0.8.5
-      '@tanstack/query-db-collection': 1.2.10
+      '@tanstack/query-db-collection': '>=1.0.40'
       '@tanstack/react-db': 0.3.5
       '@tanstack/react-query': 5.101.0
       pocketbase: '>=0.22.0'
@@ -6032,8 +6007,8 @@ packages:
       react: 19.2.0
       react-native: 0.83.6
 
-  react-native-drax@https://codeload.github.com/nathanstitt/react-native-drax/tar.gz/bc83061aceb7eae462cecc4756b3a4c81dcd1d30:
-    resolution: {gitHosted: true, integrity: sha512-fdgvmrMxJFlxArDrjNyXGw5cJ3opI/8EO3vBSA9e/hOd9kqQpJAzbSOH705lRIA8MuG0KtKeXJ83Xz8Fv/7E0g==, tarball: https://codeload.github.com/nathanstitt/react-native-drax/tar.gz/bc83061aceb7eae462cecc4756b3a4c81dcd1d30}
+  react-native-drax@https://codeload.github.com/nathanstitt/react-native-drax/tar.gz/eccc8b6f7f453882dc38182f59b76c46587b67ff:
+    resolution: {gitHosted: true, integrity: sha512-drRWSoBVS6XFzUERU67bkBMwFaGfi+uJy+Nq58GR+88Y+lUBaE2THcJkvAWjyTGtcnbi06DZ1ZHdp5I2kM+yxQ==, tarball: https://codeload.github.com/nathanstitt/react-native-drax/tar.gz/eccc8b6f7f453882dc38182f59b76c46587b67ff}
     version: 1.1.0
     peerDependencies:
       react: 19.2.0
@@ -7071,40 +7046,6 @@ packages:
         optional: true
 
 snapshots:
-
-  '@10play/tentap-editor@1.0.1(@floating-ui/dom@1.7.6)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-native-webview@13.16.0(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)':
-    dependencies:
-      '@tiptap/core': 3.29.2(@tiptap/pm@3.29.2)
-      '@tiptap/extension-blockquote': 3.29.2(@tiptap/core@3.29.2(@tiptap/pm@3.29.2))(@tiptap/pm@3.29.2)
-      '@tiptap/extension-bold': 3.29.2(@tiptap/core@3.29.2(@tiptap/pm@3.29.2))
-      '@tiptap/extension-code': 3.29.2(@tiptap/core@3.29.2(@tiptap/pm@3.29.2))
-      '@tiptap/extension-code-block': 3.29.2(@tiptap/core@3.29.2(@tiptap/pm@3.29.2))(@tiptap/pm@3.29.2)
-      '@tiptap/extension-color': 3.29.2(@tiptap/extension-text-style@3.29.2(@tiptap/core@3.29.2(@tiptap/pm@3.29.2)))
-      '@tiptap/extension-document': 3.29.2(@tiptap/core@3.29.2(@tiptap/pm@3.29.2))
-      '@tiptap/extension-hard-break': 3.29.2(@tiptap/core@3.29.2(@tiptap/pm@3.29.2))
-      '@tiptap/extension-heading': 3.29.2(@tiptap/core@3.29.2(@tiptap/pm@3.29.2))
-      '@tiptap/extension-highlight': 3.26.0(@tiptap/core@3.29.2(@tiptap/pm@3.29.2))
-      '@tiptap/extension-horizontal-rule': 3.29.2(@tiptap/core@3.29.2(@tiptap/pm@3.29.2))(@tiptap/pm@3.29.2)
-      '@tiptap/extension-image': 3.29.2(@tiptap/core@3.29.2(@tiptap/pm@3.29.2))
-      '@tiptap/extension-italic': 3.29.2(@tiptap/core@3.29.2(@tiptap/pm@3.29.2))
-      '@tiptap/extension-link': 3.29.2(@tiptap/core@3.29.2(@tiptap/pm@3.29.2))(@tiptap/pm@3.29.2)
-      '@tiptap/extension-list': 3.29.2(@tiptap/core@3.29.2(@tiptap/pm@3.29.2))(@tiptap/pm@3.29.2)
-      '@tiptap/extension-strike': 3.29.2(@tiptap/core@3.29.2(@tiptap/pm@3.29.2))
-      '@tiptap/extension-text-style': 3.29.2(@tiptap/core@3.29.2(@tiptap/pm@3.29.2))
-      '@tiptap/extension-underline': 3.29.2(@tiptap/core@3.29.2(@tiptap/pm@3.29.2))
-      '@tiptap/extensions': 3.29.2(@tiptap/core@3.29.2(@tiptap/pm@3.29.2))(@tiptap/pm@3.29.2)
-      '@tiptap/pm': 3.29.2
-      '@tiptap/react': 3.29.2(@floating-ui/dom@1.7.6)(@tiptap/core@3.29.2(@tiptap/pm@3.29.2))(@tiptap/pm@3.29.2)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
-      '@tiptap/starter-kit': 3.29.2
-      lodash: 4.18.1
-      react: 19.2.0
-      react-dom: 19.2.0(react@19.2.0)
-      react-native: 0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0)
-      react-native-webview: 13.16.0(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)
-    transitivePeerDependencies:
-      - '@floating-ui/dom'
-      - '@types/react'
-      - '@types/react-dom'
 
   '@babel/code-frame@7.10.4':
     dependencies:
@@ -9925,10 +9866,6 @@ snapshots:
     dependencies:
       '@tiptap/core': 3.29.2(@tiptap/pm@3.29.2)
 
-  '@tiptap/extension-highlight@3.26.0(@tiptap/core@3.29.2(@tiptap/pm@3.29.2))':
-    dependencies:
-      '@tiptap/core': 3.29.2(@tiptap/pm@3.29.2)
-
   '@tiptap/extension-horizontal-rule@3.29.2(@tiptap/core@3.29.2(@tiptap/pm@3.29.2))(@tiptap/pm@3.29.2)':
     dependencies:
       '@tiptap/core': 3.29.2(@tiptap/pm@3.29.2)
@@ -11217,6 +11154,11 @@ snapshots:
     dependencies:
       expo: 55.0.26(@babel/core@7.29.7)(@expo/dom-webview@55.0.6)(@expo/metro-runtime@55.0.11)(expo-router@55.0.16)(react-dom@19.2.0(react@19.2.0))(react-native-webview@13.16.0(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native-worklets@0.7.4(@babel/core@7.29.7)(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)(typescript@5.9.3)
 
+  expo-image-manipulator@55.0.21(expo@55.0.26):
+    dependencies:
+      expo: 55.0.26(@babel/core@7.29.7)(@expo/dom-webview@55.0.6)(@expo/metro-runtime@55.0.11)(expo-router@55.0.16)(react-dom@19.2.0(react@19.2.0))(react-native-webview@13.16.0(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native-worklets@0.7.4(@babel/core@7.29.7)(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)(typescript@5.9.3)
+      expo-image-loader: 55.0.1(expo@55.0.26)
+
   expo-image-picker@55.0.20(expo@55.0.26):
     dependencies:
       expo: 55.0.26(@babel/core@7.29.7)(@expo/dom-webview@55.0.6)(@expo/metro-runtime@55.0.11)(expo-router@55.0.16)(react-dom@19.2.0(react@19.2.0))(react-native-webview@13.16.0(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native-worklets@0.7.4(@babel/core@7.29.7)(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)(typescript@5.9.3)
@@ -12328,8 +12270,6 @@ snapshots:
 
   lodash.throttle@4.1.1: {}
 
-  lodash@4.18.1: {}
-
   log-symbols@2.2.0:
     dependencies:
       chalk: 2.4.2
@@ -12843,7 +12783,7 @@ snapshots:
 
   pathval@2.0.1: {}
 
-  pbtsdb@0.7.2(@tanstack/db@0.8.5(typescript@5.9.3))(@tanstack/query-db-collection@1.2.10(@tanstack/query-core@5.101.0)(typescript@5.9.3))(@tanstack/react-db@0.3.5(react@19.2.0)(typescript@5.9.3))(@tanstack/react-query@5.101.0(react@19.2.0))(pocketbase@0.26.9)(react-dom@19.2.0(react@19.2.0))(react@19.2.0):
+  pbtsdb@0.9.3(@tanstack/db@0.8.5(typescript@5.9.3))(@tanstack/query-db-collection@1.2.10(@tanstack/query-core@5.101.0)(typescript@5.9.3))(@tanstack/react-db@0.3.5(react@19.2.0)(typescript@5.9.3))(@tanstack/react-query@5.101.0(react@19.2.0))(pocketbase@0.26.9)(react-dom@19.2.0(react@19.2.0))(react@19.2.0):
     dependencies:
       '@tanstack/db': 0.8.5(typescript@5.9.3)
       '@tanstack/query-db-collection': 1.2.10(@tanstack/query-core@5.101.0)(typescript@5.9.3)
@@ -13129,7 +13069,7 @@ snapshots:
       react: 19.2.0
       react-native: 0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0)
 
-  react-native-drax@https://codeload.github.com/nathanstitt/react-native-drax/tar.gz/bc83061aceb7eae462cecc4756b3a4c81dcd1d30(react-native-gesture-handler@3.0.1(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native-reanimated@4.2.1(react-native-worklets@0.7.4(@babel/core@7.29.7)(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0):
+  react-native-drax@https://codeload.github.com/nathanstitt/react-native-drax/tar.gz/eccc8b6f7f453882dc38182f59b76c46587b67ff(react-native-gesture-handler@3.0.1(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native-reanimated@4.2.1(react-native-worklets@0.7.4(@babel/core@7.29.7)(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0))(react@19.2.0):
     dependencies:
       react: 19.2.0
       react-native: 0.83.6(@babel/core@7.29.7)(@react-native-community/cli@20.1.3(typescript@5.9.3))(@types/react@19.2.17)(react@19.2.0)
