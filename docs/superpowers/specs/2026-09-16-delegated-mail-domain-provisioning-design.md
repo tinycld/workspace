@@ -145,15 +145,6 @@ covered by a managed prefix so no org can set its own, and is filtered out of
 the materialized `syscfg.json` and the `cfg.sock` push. The server token
 continues to flow to tenants as it does now.
 
-**The router is a credential proxy, not a policy checkpoint.** It does not
-decide whether an org may have a domain. Tenant admins and owners create their
-own `mail_domains` rows freely and will commonly have several; that stays
-entirely the tenant's business and requires no operator involvement. The router
-is involved solely because the account token cannot live in a tenant.
-
-Consequently `org_mail_domains` is **not** used to gate these calls. It remains
-what it is today: the operator-assigned inbound-MX routing registry.
-
 ### Postmark account-level uniqueness
 
 A domain is unique per Postmark account. If org A enrolls `acme.com`, org B's
@@ -165,6 +156,54 @@ must be **legible**: the router maps Postmark's 422 to a distinct error, and
 the UI renders "this domain is already configured on this host" rather than a
 raw provider message. The first enrollment wins; no silent takeover is possible
 either way, since neither org ever holds the token.
+
+## One key in, not two
+
+The account token can derive the server token, so requiring both is redundant
+input. In `postmark@v1.9.0/servers.go`, `Server` carries
+`APITokens []string` (line 17), and `GetServers` / `GetServer` are
+account-token calls (lines 171, 189) that return it populated.
+
+`mail.postmark_server_token` therefore becomes a **derived value rather than an
+operator input**. Whoever holds the account token — the router when hosted, the
+deployment itself when standalone — resolves the server token from Postmark and
+caches it, instead of an administrator pasting a second key.
+
+This removes a real failure mode, not just a setup step. Today nothing checks
+that the pasted pair belongs together: a server token from a *different* server
+than the account being managed produces a half-broken deployment where sending
+works and domain verification silently does not, with no error pointing at the
+mismatch.
+
+Resolution rules:
+
+- The token is resolved lazily on first need and cached in memory, refreshed on
+  a Postmark auth failure. It is never written to a tenant's database.
+- Which server is chosen: the single server on the account, or — when the
+  account has several — the one named by an optional `mail.postmark_server_name`
+  setting. If the account has multiple servers and no name is configured, that
+  is a configuration error surfaced to the operator, never a silent pick.
+- **Hosted:** the router resolves it and continues to push
+  `mail.postmark_server_token` down through syscfg exactly as it does today.
+  Tenants are unaffected — they still receive a server token and never see the
+  account token. The change is purely in where that value originates.
+- **Standalone:** the direct registrar resolves it from the deployment's own
+  account token. An existing deployment that still has a server token stored
+  keeps working — an explicitly configured value wins over derivation, so no
+  migration is forced.
+
+`mail.postmark_server_token` stays a supported settings key for that reason,
+and for any deployment that deliberately wants to supply a scoped token without
+handing tinycld account-level access.
+
+**The router is a credential proxy, not a policy checkpoint.** It does not
+decide whether an org may have a domain. Tenant admins and owners create their
+own `mail_domains` rows freely and will commonly have several; that stays
+entirely the tenant's business and requires no operator involvement. The router
+is involved solely because the account token cannot live in a tenant.
+
+Consequently `org_mail_domains` is **not** used to gate these calls. It remains
+what it is today: the operator-assigned inbound-MX routing registry.
 
 ## What stays in the tenant
 
@@ -242,6 +281,11 @@ SPF/DKIM/return-path remain advisory in both cases.
   it is tested directly rather than inferred from the filtering code.
 - **Parity test** — one seam contract exercised against both the direct and the
   delegating implementation, so single-tenant and hosted cannot drift.
+- **Token derivation** — against the stub Postmark server: resolves and caches
+  the server token from the account token; an explicitly configured server
+  token wins over derivation; a multi-server account with no
+  `mail.postmark_server_name` raises a configuration error rather than picking
+  one; a Postmark auth failure invalidates the cache and re-resolves.
 - **E2E** — add a domain through the UI and assert the DNS records render and
   are copyable, driving the UI rather than writing rows directly.
 
@@ -250,6 +294,20 @@ SPF/DKIM/return-path remain advisory in both cases.
 - DNS automation. Publishing records stays the customer's work; no registrar
   API integration.
 - DKIM signing. Still the provider's job; tinycld generates no keypair.
-- Per-org Postmark *servers*. One account, one server token, as today.
+- **Per-org Postmark servers.** One account, one shared server, as today.
+  Deliberately deferred rather than dismissed: now that the router holds the
+  account token it *could* `CreateServer` per org (which returns a populated
+  `APITokens`, `servers.go:201`) and give each tenant its own server token.
+  That would be a genuine isolation win — one org's leaked server token
+  currently exposes the whole fleet's sending, and every org's message streams
+  share one Postmark server.
+
+  It is out of scope here because it breaks assumptions this spec relies on:
+  `mail.postmark_server_token` would become per-org, contradicting syscfg's
+  "one value serves every org" model for that key; `CheckInboundDomain`
+  (`mail/server/postmark.go:218`) documents that it assumes one server and
+  would need `GetServers`; server lifecycle joins org provisioning and
+  offboarding; and inbound webhook URLs are per-server, changing
+  `webhook-urls` and inbound routing. Worth its own design.
 - Custom web hostnames. Orgs remain at `<slug>.<base>` for HTTP and mail
   client configuration.
