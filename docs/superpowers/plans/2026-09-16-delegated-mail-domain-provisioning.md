@@ -22,6 +22,92 @@
 
 ---
 
+## AMENDMENT 1 (2026-09-16, after Task 3) — look up a domain by stored ID, not by scanning
+
+**This supersedes the list-and-scan approach in Task 3, and adds requirements to
+Tasks 8 and 9 plus a new Task 3b. Read it before implementing any of them.**
+
+Task 3's review raised the pagination ceiling as an Important, plan-mandated
+finding: `GetDomain` listed only the first 100 domains and reported a domain
+beyond that page as **not enrolled**. On a hosting deployment one Postmark
+account serves every org, so that ceiling is reachable, and the symptom is bad —
+an admin who already published their DNS sees "not enrolled", re-adds, and hits
+"already enrolled": a dead end.
+
+**The fix, decided by the plan owner:** stop scanning. Postmark's
+`GetDomain(ctx, domainID int64)` fetches one domain directly. There is no
+lookup-by-name endpoint — that is why the plan scanned — but `CreateDomain`
+**returns** `DomainDetails.ID`, so the ID can be stored at enrollment and used
+directly forever after. One API call, no ceiling.
+
+**Storage:** a NEW migration adds a JSON field `provider_domain_metadata` to
+`mail_domains`, holding the provider's id **and its last reported verification
+state**, for reporting:
+
+```json
+{
+  "postmark": {
+    "domain_id": 12345,
+    "checked_at": "2026-09-16T14:02:11.412Z",
+    "enrolled": true,
+    "spf_verified": false,
+    "dkim_verified": true,
+    "return_path_verified": true
+  }
+}
+```
+
+The per-check booleans already exist as columns on `mail_domains` and are what
+the UI renders; this is deliberately **not** a replacement for them. It is the
+provider's own answer, stamped with when it was given, kept so an operator can
+report on provider state across domains — including for a domain whose row-level
+flags were later changed by a different code path, and including `enrolled`,
+which has no column at all. Writing it is the same save that writes the flags,
+so the two cannot drift.
+
+A new migration is mandatory: `1713000012_mail_domain_verification.js` is
+RELEASED (present in tags `v0.3.0`, `v0.3.1`, `v0.4.0`), so per `CLAUDE.md` it is
+frozen — editing it in place would silently never apply to an existing database.
+
+**A JSON field rather than a scalar column** so a second provider, or more
+per-provider state, does not need another migration later.
+
+### What each task must now do
+
+- **Task 3b (NEW, see below):** the migration.
+- **Task 3 (amend):** `Registrar.GetDomain` gains an ID parameter; the
+  Postmark implementation calls `GetDomain(id)` when the ID is known and falls
+  back to the name scan only when it is zero (a row enrolled before this
+  change), so existing installs self-heal. Also fix the inaccurate
+  `isAlreadyExists` doc comment — it claims the error code is inspected; it is
+  not, only the message substring is. Describe what the code does.
+- **Task 8 (amend):** `checkOutbound` reads the stored ID off the record and
+  passes it to the seam; on a successful scan-fallback it persists the newly
+  learned ID so the scan happens at most once per domain. It also writes the
+  provider's reported state into `provider_domain_metadata` — `enrolled`,
+  the three verification booleans, and a `checked_at` RFC3339Nano stamp — in the
+  **same `app.Save`** that writes the row's own flags, so the two cannot drift.
+  On an `enrolled: false` or a transport failure it still stamps `checked_at`
+  and `enrolled`, so "we asked and were told no" is distinguishable from "we
+  have never successfully asked".
+- **Task 9 (amend):** `handleAddDomain` persists `provider_domain_metadata`
+  from the `DomainRecords` that `AddDomain` returns — the `ID`, `enrolled: true`,
+  the three booleans as Postmark reported them at enrollment, and `checked_at`.
+
+The amended seam signature, which Tasks 3, 3b, 7, 8 and 9 all share:
+
+```go
+// providerDomainID is Postmark's numeric id for the domain, or 0 when it is not
+// yet known (a row enrolled before the id was stored). A zero id means the
+// implementation must fall back to a by-name lookup and the caller should
+// persist the id it learns.
+GetDomain(ctx context.Context, domain string, providerDomainID int64) (*DomainRecords, error)
+```
+
+`AddDomain` is unchanged — it already returns `DomainRecords.ID`.
+
+---
+
 ## File Structure
 
 **`tinycld/core/server/maildomains/`** (new package — the seam)
@@ -638,6 +724,11 @@ error, never a silent pick."
 
 ## Task 3: The direct Postmark registrar
 
+> **AMENDED — see AMENDMENT 1 above.** Task 3 was implemented as written and
+> committed (`77d9d3f`), then its review raised the pagination ceiling. The
+> amended requirements are delivered as **Task 3c** below, after the migration
+> in Task 3b. Implement Tasks 1-3 as written, then 3b, then 3c.
+
 **Files:**
 - Create: `tinycld/core/server/maildomains/postmark.go`
 - Test: `tinycld/core/server/maildomains/postmark_test.go`
@@ -920,6 +1011,305 @@ fetched and threw away. Duplicate enrollment is a distinct error because
 on a shared hosting account it is the ordinary collision between two orgs
 claiming one domain."
 ```
+
+---
+
+## Task 3b: Store the provider's domain id
+
+**Files:**
+- Create: `mail/pb-migrations/1830000006_mail_domain_provider_metadata.js`
+
+**Interfaces:**
+- Consumes: nothing.
+- Produces: a `provider_domain_metadata` JSON field on `mail_domains`, read by
+  Tasks 8 and 9.
+
+- [ ] **Step 1: Write the migration**
+
+Model it on the existing `1713000013_mail_domain_webhook_secret.js` — same
+`/// <reference>` header, same `migrate(up, down)` shape, same `Field` construction.
+
+```js
+/// <reference path="../../../server/pb_data/types.d.ts" />
+migrate(
+    app => {
+        const domains = app.findCollectionByNameOrId('mail_domains')
+
+        // Per-provider state for this domain: the provider's own id, and the
+        // verification answer it last gave, stamped with when.
+        //
+        //   {"postmark":{"domain_id":12345,"checked_at":"2026-09-16T14:02:11Z",
+        //    "enrolled":true,"spf_verified":false,"dkim_verified":true,
+        //    "return_path_verified":true}}
+        //
+        // The id matters because Postmark has no lookup-by-name: without it a
+        // status check must page the whole account's domain list and reports a
+        // domain past the first page as unenrolled.
+        //
+        // The status is kept for reporting, NOT to render this domain's UI —
+        // the row's own *_verified columns do that. This is the provider's
+        // answer with a timestamp, which those columns cannot express: they
+        // carry no "when", and no "enrolled" at all.
+        //
+        // JSON rather than scalar columns so a second provider, or more
+        // per-provider state, needs no further migration.
+        domains.fields.add(
+            new Field({
+                id: 'mail_domains_provider_metadata',
+                name: 'provider_domain_metadata',
+                type: 'json',
+                maxSize: 2000,
+            })
+        )
+
+        app.save(domains)
+    },
+    app => {
+        const domains = app.findCollectionByNameOrId('mail_domains')
+        domains.fields.removeById('mail_domains_provider_metadata')
+        app.save(domains)
+    }
+)
+```
+
+No backfill: an existing row simply has no id yet, and the scan-fallback in the
+amended Task 3 learns and persists it on the next status check.
+
+- [ ] **Step 2: Verify the migration applies**
+
+Run the mail package's test suite, which boots a PocketBase with the migrations
+applied:
+
+```bash
+cd /Users/nas/code/tinycld/mail/server && go test ./... 2>&1 | tail -20
+```
+
+Expected: PASS. A malformed migration fails collection lookup at boot, so a
+green suite is the signal it applied.
+
+- [ ] **Step 3: Register the field in the TS collection types**
+
+`mail/tinycld/mail/collections.ts` registers `mail_domains` with
+`omitOnInsert: ['created', 'updated', 'webhook_secret']`. Add
+`provider_domain_metadata` to that list — it is server-owned, and a client
+insert must not set it.
+
+- [ ] **Step 4: Regenerate and typecheck**
+
+```bash
+cd /Users/nas/code/tinycld/tinycld && pnpm run packages:generate
+cd /Users/nas/code/tinycld/mail && pnpm exec tinycld-pkg typecheck
+```
+
+- [ ] **Step 5: Commit**
+
+```bash
+cd /Users/nas/code/tinycld/mail
+git add pb-migrations/1830000006_mail_domain_provider_metadata.js tinycld/mail/collections.ts
+git commit -m "feat(mail): store per-provider domain metadata
+
+Postmark has no lookup-by-name, so a status check had to page the whole
+account's domain list and reported a domain past the first page as
+unenrolled. CreateDomain returns the id; this is where it goes."
+```
+
+---
+
+## Task 3c: Look up by id, and correct the duplicate-match comment
+
+**Files:**
+- Modify: `tinycld/core/server/maildomains/maildomains.go` (the `Registrar` interface)
+- Modify: `tinycld/core/server/maildomains/postmark.go`
+- Modify: `tinycld/core/server/maildomains/postmark_test.go`
+
+**Interfaces:**
+- Consumes: everything from Tasks 1-3.
+- Produces: the amended seam signature
+  `GetDomain(ctx context.Context, domain string, providerDomainID int64) (*DomainRecords, error)`,
+  which Tasks 5, 7, 8 and 9 all use.
+
+- [ ] **Step 1: Write the failing tests**
+
+Add to `postmark_test.go`. Keep the existing tests; update their `GetDomain`
+calls to pass `0` as the new third argument.
+
+```go
+// With the id known, the lookup is ONE direct call — no listing. This is the
+// whole point: a list-and-scan reports a domain past the first page as
+// unenrolled, and on a hosting account one Postmark account serves every org.
+func TestGetDomainByIDSkipsListing(t *testing.T) {
+	f := &fakeDomains{details: map[int64]postmark.DomainDetails{
+		7: {ID: 7, Name: "acme.com", DKIMVerified: true},
+	}}
+	r := NewPostmarkRegistrar("acct", f)
+
+	rec, err := r.GetDomain(context.Background(), "acme.com", 7)
+	if err != nil {
+		t.Fatalf("GetDomain: %v", err)
+	}
+	if !rec.DKIMVerified || rec.ID != 7 {
+		t.Fatalf("rec = %+v, want the domain fetched by id", rec)
+	}
+	if f.listCalls != 0 {
+		t.Errorf("GetDomains called %d times, want 0 when the id is known", f.listCalls)
+	}
+}
+
+// A zero id is a row enrolled before ids were stored: fall back to the scan so
+// existing installs keep working and can self-heal.
+func TestGetDomainZeroIDFallsBackToScan(t *testing.T) {
+	f := &fakeDomains{
+		list:    []postmark.Domain{{ID: 7, Name: "acme.com"}},
+		details: map[int64]postmark.DomainDetails{7: {ID: 7, Name: "acme.com"}},
+	}
+	r := NewPostmarkRegistrar("acct", f)
+
+	rec, err := r.GetDomain(context.Background(), "acme.com", 0)
+	if err != nil {
+		t.Fatalf("GetDomain: %v", err)
+	}
+	if rec.ID != 7 {
+		t.Fatalf("rec.ID = %d, want 7 so the caller can persist it", rec.ID)
+	}
+	if f.listCalls != 1 {
+		t.Errorf("GetDomains called %d times, want 1 for the fallback", f.listCalls)
+	}
+}
+
+// A stored id that Postmark no longer knows (the domain was deleted in their
+// dashboard) must read as not-enrolled, not as an opaque API error.
+func TestGetDomainStaleIDIsNotEnrolled(t *testing.T) {
+	r := NewPostmarkRegistrar("acct", &fakeDomains{getErr: postmark.APIError{
+		ErrorCode: 701, Message: "The domain does not exist.",
+	}})
+
+	if _, err := r.GetDomain(context.Background(), "acme.com", 999); !errors.Is(err, ErrDomainNotEnrolled) {
+		t.Fatalf("err = %v, want ErrDomainNotEnrolled for a stale id", err)
+	}
+}
+```
+
+Extend `fakeDomains` with `listCalls int` (incremented in `GetDomains`) and
+`getErr error` (returned from `GetDomain` when non-nil).
+
+- [ ] **Step 2: Run to verify they fail**
+
+Run: `cd /Users/nas/code/tinycld/tinycld/core/server && go test ./maildomains/ -run TestGetDomain -v`
+Expected: FAIL — `GetDomain` takes two arguments, not three.
+
+- [ ] **Step 3: Amend the interface and the implementation**
+
+In `maildomains.go`, change the `Registrar` interface's `GetDomain`:
+
+```go
+	// GetDomain reads the current state of an enrolled domain.
+	//
+	// providerDomainID is the provider's own id, or 0 when it is not known — a
+	// row enrolled before the id was stored. A zero id forces a by-name lookup,
+	// which is why it is worth persisting the id from the returned records:
+	// Postmark has no lookup-by-name, so the fallback must page the account's
+	// whole domain list and would report a domain past the first page as
+	// unenrolled.
+	GetDomain(ctx context.Context, domain string, providerDomainID int64) (*DomainRecords, error)
+```
+
+Update the `unconfigured` stub's signature to match.
+
+In `postmark.go`, replace `GetDomain`'s body:
+
+```go
+func (p *PostmarkRegistrar) GetDomain(ctx context.Context, domain string, providerDomainID int64) (*DomainRecords, error) {
+	if p.accountToken == "" {
+		return nil, ErrNotConfigured
+	}
+	if providerDomainID != 0 {
+		details, err := p.client.GetDomain(ctx, providerDomainID)
+		if err != nil {
+			// A stored id Postmark no longer knows means the domain was removed
+			// on their side. That is "not enrolled" — the actionable answer —
+			// not an opaque API failure the admin cannot interpret.
+			if isNotFound(err) {
+				return nil, fmt.Errorf("%w: %s", ErrDomainNotEnrolled, domain)
+			}
+			return nil, fmt.Errorf("postmark get domain: %w", err)
+		}
+		return toDomainRecords(details), nil
+	}
+	return p.findByName(ctx, domain)
+}
+
+// findByName is the fallback for a row enrolled before the id was stored. It
+// pages the account's domain list; the caller is expected to persist the id
+// from the result so this runs at most once per domain.
+func (p *PostmarkRegistrar) findByName(ctx context.Context, domain string) (*DomainRecords, error) {
+	for offset := 0; ; offset += domainListLimit {
+		list, err := p.client.GetDomains(ctx, domainListLimit, offset)
+		if err != nil {
+			return nil, fmt.Errorf("postmark list domains: %w", err)
+		}
+		for _, d := range list.Domains {
+			if strings.EqualFold(d.Name, domain) {
+				details, err := p.client.GetDomain(ctx, d.ID)
+				if err != nil {
+					return nil, fmt.Errorf("postmark get domain: %w", err)
+				}
+				return toDomainRecords(details), nil
+			}
+		}
+		// Stop at the last page. TotalCount is the account's full size, so
+		// this terminates even when a page comes back short.
+		if len(list.Domains) == 0 || offset+len(list.Domains) >= list.TotalCount {
+			return nil, fmt.Errorf("%w: %s", ErrDomainNotEnrolled, domain)
+		}
+	}
+}
+
+// isNotFound recognises Postmark's "no such domain" refusal. Matched on the
+// message for the same reason as isAlreadyExists: the numeric codes are not
+// documented as stable.
+func isNotFound(err error) bool {
+	var apiErr postmark.APIError
+	if errors.As(err, &apiErr) {
+		msg := strings.ToLower(apiErr.Message)
+		return strings.Contains(msg, "does not exist") || strings.Contains(msg, "not found")
+	}
+	return false
+}
+```
+
+Also correct the inaccurate comment on `isAlreadyExists` — it currently claims
+the error code is inspected, which it is not:
+
+```go
+// isAlreadyExists recognises Postmark's duplicate-name refusal.
+//
+// Matched on the message rather than the numeric code, which Postmark does not
+// document as stable. If they reword it this returns false and the caller
+// surfaces a generic wrapped error — worse copy, but never a wrong outcome.
+```
+
+- [ ] **Step 4: Run to verify they pass**
+
+Run: `cd /Users/nas/code/tinycld/tinycld/core/server && go test ./maildomains/ -v`
+Expected: PASS — all prior tests plus the three new ones.
+
+- [ ] **Step 5: Commit**
+
+```bash
+cd /Users/nas/code/tinycld/tinycld
+git add core/server/maildomains/
+git commit -m "fix(core): look a domain up by the provider's id
+
+Listing one page and scanning reported a domain past the first 100 as
+unenrolled — reachable on a hosting account, where one provider account
+serves every org, and the symptom is a dead end: the admin is told to
+re-add a domain that is already there. CreateDomain returns the id, so
+store it and fetch directly; the scan survives only as a self-healing
+fallback for rows enrolled before the id existed, and now pages to
+exhaustion rather than stopping at 100."
+```
+
+---
 
 ---
 
