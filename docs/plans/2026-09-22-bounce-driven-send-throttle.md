@@ -92,10 +92,20 @@ address changes, manual deactivations.
 
 ### 2. Router-side bounce endpoint
 
+**Decided:** hosting owns this handler. It is the fleet's single bounce
+destination, and the URL an operator configures in Postmark.
+
 - Mount `POST /api/mail/bounce/{secret}` on the control plane's existing
   route group (`internal/controlplane/provisioning.go:446`). **Not**
   superuser-gated — it is a webhook, and the shared secret is the auth, the
   same posture the tenant's per-domain secret already uses.
+- The secret is fleet-wide, not per-org: there is one Postmark server and so
+  one URL. Store it beside the other operator-owned values on the control
+  plane, never in a tenant's DB. Rotating it means updating one field in
+  Postmark, so make the value readable back to the operator.
+- Reject an unknown or absent secret with a bare 404 rather than a 401 — a
+  webhook endpoint that distinguishes "wrong secret" from "no such route"
+  tells a prober it has found something.
 - Attribute by sending domain: parse the bounce's `From`, take its domain,
   and resolve it with the **existing** `MailDomainLookup(domain) → slug`
   (`internal/controlplane/mail_domains.go:19-30`). No tenant change and no
@@ -161,6 +171,43 @@ org owner with the actual numbers and what to do. Nothing is restricted.
 works end to end today — `PushPlan` reaches one org live, and mail's gate
 already refuses above it with a message pointing at an administrator.
 
+**Decided: the org owner is told, by automated mail, when the throttle
+lands.** They will discover it within minutes anyway — the next bulk send
+fails — and a refusal they cannot explain is worse than one that arrives with
+a reason. The mail states what was measured, what the ceiling now is, that it
+lifts automatically in 48 hours, and how to ask for an immediate review.
+
+This does tell an attacker inside a compromised org that they have been
+noticed. Accepted, for two reasons: the throttle already announces itself the
+moment they try to send, and step 5 disables the individual account before
+the org-wide ladder reaches this tier in exactly the case where the attacker
+is a user rather than the org.
+
+Send it through core's mailer, not through the org's own mail package — it
+must reach the owner while the org is throttled, and it must not consume the
+org's throttled budget. Core's transactional path already bypasses mail's
+send gate, so this works by construction.
+
+**Decided: a throttle expires after 48 hours, or is lifted immediately on
+review.** Both matter. Expiry stops an org being forgotten in a throttled
+state when nobody gets to the review; manual lifting means a false positive
+costs minutes rather than two days.
+
+- Store the expiry as a timestamp on the org, not a duration — a duration
+  needs a start time anyway, and a timestamp survives a router restart.
+- A sweeper lifts expired throttles. There is an hourly precedent to follow
+  in `cmd/serve-router/main.go:438` (`sweepBuilds`); this gets its own beside
+  it. **Hourly granularity means a 48h throttle lifts somewhere in 48–49h.**
+  State that in the notification rather than promising an exact hour.
+- Expiry lifts the throttle; it does **not** clear the breach. If the org is
+  still over threshold at the next evaluation it is re-throttled, which is
+  the correct outcome and is why expiry is safe to automate.
+- A manual lift **must** clear the counters, or the org re-trips within the
+  hour and the operator concludes the feature is broken.
+- Re-throttling after an expiry should escalate to a human rather than
+  looping silently: a second throttle inside a week is a review, not a
+  statistic.
+
 **Tier 3 — page a human.** Do **not** auto-suspend. If an org is still
 generating complaints on a starvation send budget, that is a person's
 decision with a person's context.
@@ -173,8 +220,8 @@ Two is enough to stop a real incident and small enough that a bug pages
 somebody instead of causing an outage. **If the recent-throttle count cannot
 be read, assume it is at the cap and do not throttle.**
 
-**Lifting is manual**, and must clear the counters — otherwise the org
-re-trips within the hour and the operator concludes the feature is broken.
+**Lifting** happens either way — automatically at expiry, or immediately on
+review. See Tier 2 above for what each one clears.
 
 ### 5. Per-user containment (do this before Tier 2 fires org-wide)
 
@@ -247,12 +294,10 @@ change — the seam already exists.
 
 ## Open questions
 
-- **Who configures Postmark's bounce URL?** Today it is manual. Should the
-  router set it through Postmark's API at startup, or stay manual with a
-  documented value?
-- **Does the operator want a Tier 2 notification to the org owner**, or only
-  to themselves? Telling an org "you are throttled" also tells an attacker
-  inside that org that they have been noticed.
-- **Should a throttle expire on its own** after N days if nobody reviews it,
-  or hold until lifted? Holding is safer; expiring avoids an org being
-  forgotten in a throttled state.
+- **Should the 48h expiry be per-plan?** A paying org might reasonably get a
+  shorter throttle than a free one, on the grounds that there is a contract
+  and a known human behind it. Left uniform for now.
+- **What does the org owner see in-app?** The notification mail is specified
+  above; whether the throttle is also surfaced in mail settings — where the
+  DNS verification state already is — is unresolved. It probably should be,
+  since that is where someone looks when sending breaks.
