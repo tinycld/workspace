@@ -193,8 +193,18 @@ review.** Both matter. Expiry stops an org being forgotten in a throttled
 state when nobody gets to the review; manual lifting means a false positive
 costs minutes rather than two days.
 
+**The 48 hours is per-plan**, carried as a `Plan` field beside the ceilings
+it governs (`MailThrottleHours`, say). A paying org with a contract and a
+known human behind it reasonably gets a shorter hold than a free one, and the
+value belongs with the other things a plan sells rather than as a constant.
+Zero means "use the default" rather than "expires instantly" — the unlimited
+convention does not fit a duration, so this is the one place the zero rule
+differs and it must be commented as such.
+
 - Store the expiry as a timestamp on the org, not a duration — a duration
-  needs a start time anyway, and a timestamp survives a router restart.
+  needs a start time anyway, and a timestamp survives a router restart. The
+  plan supplies the length; the org row records when this particular throttle
+  ends.
 - A sweeper lifts expired throttles. There is an hourly precedent to follow
   in `cmd/serve-router/main.go:438` (`sweepBuilds`); this gets its own beside
   it. **Hourly granularity means a 48h throttle lifts somewhere in 48–49h.**
@@ -207,6 +217,17 @@ costs minutes rather than two days.
 - Re-throttling after an expiry should escalate to a human rather than
   looping silently: a second throttle inside a week is a review, not a
   statistic.
+
+**The throttle is visible in settings**, not only in the notification mail.
+Someone whose sending has broken looks at mail settings, which is already
+where the DNS verification state lives — so that is where this belongs too.
+
+`GET /api/plan` (`hosting/limits/endpoint.go:30`) already serves the org's
+resolved limits to any authenticated user, so this needs no new channel:
+surface the hourly ceiling and the expiry timestamp through the existing
+`Status`, and have the settings screen render them when the ceiling is set.
+Show the expiry as a time, not a countdown — an hourly sweeper cannot honour
+a ticking clock.
 
 **Tier 3 — page a human.** Do **not** auto-suspend. If an org is still
 generating complaints on a starvation send budget, that is a person's
@@ -294,10 +315,7 @@ change — the seam already exists.
 
 ## Open questions
 
-- **Should the 48h expiry be per-plan?** A paying org might reasonably get a
-  shorter throttle than a free one, on the grounds that there is a contract
-  and a known human behind it. Left uniform for now.
-- **What does the org owner see in-app?** The notification mail is specified
-  above; whether the throttle is also surfaced in mail settings — where the
-  DNS verification state already is — is unresolved. It probably should be,
-  since that is where someone looks when sending breaks.
+- **Does the operator want the throttle reason surfaced too**, or only its
+  existence and expiry? Saying "your mail generated 40 spam complaints" is
+  more actionable than "you are rate-limited", but it also tells a
+  compromised account exactly what tripped the detection.
