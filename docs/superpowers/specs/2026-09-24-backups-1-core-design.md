@@ -133,7 +133,10 @@ func Restore(app core.App, req RestoreRequest) (jobID string, err error)
 // A rebuilder makes the running package set equal to the lockfile and ends by
 // restarting the process. Core's self-rebuild path registers one when
 // supportsSelfRebuild(). An embedder registers its own. None ⇒ single binary.
-func RegisterRebuilder(fn func(ctx context.Context, lockfile Lockfile) error)
+// The restore hands its claimed installjob to the rebuilder so no other job
+// can slip in between staging and the rebuild; the rebuilder owns the job
+// from then on and ends by restarting the process.
+func RegisterRebuilder(fn func(ctx context.Context, job *installjob.Job, lockfile Lockfile) error)
 ```
 
 Phases, one `installjob.Job{Action: "restore"}`, progress through the existing
