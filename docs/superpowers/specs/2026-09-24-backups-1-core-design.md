@@ -179,7 +179,7 @@ labels older rows "from the restored backup".
 `Range: bytes=<consumed>-` and `If-Range: <ETag>`; bounded retries with
 backoff. A 200 where 206 is expected ⇒ "source does not support resume",
 job fails. A 403 (expired presigned URL) ⇒ job status `waiting_for_source`
-for up to 15 minutes; `PATCH /api/backups/restore/{jobId} { source }` swaps
+for up to 15 minutes; `PATCH /api/org-backups/restore/{jobId} { source }` swaps
 the URL and the reader resumes at the same offset with the same `If-Range`.
 Timeout ⇒ `failed`, `pending/` deleted, pre-restore backup kept.
 
@@ -188,15 +188,17 @@ signature).
 
 ## HTTP API (bound by core)
 
+The prefix is `/api/org-backups` because PocketBase's own superuser backup API already owns `/api/backups`.
+
 ```
-POST  /api/backups                    owner|admin; OAuth scope `backups`
+POST  /api/org-backups                    owner|admin; OAuth scope `backups`
       { target: "<PUT url>", passphrase }        → 202 { id }
       { stream: true, passphrase }               → 200 chunked archive
-POST  /api/backups/restore            owner
+POST  /api/org-backups/restore            owner
       { source: "<GET url>", passphrase, force? } → 202 { jobId }
       multipart body `archive` + fields           → 202 { jobId }   (CLI --from file)
-PATCH /api/backups/restore/{jobId}    owner   { source }            → 204
-GET   /api/backups/verify             owner|admin  → row/file counts vs manifest, integrity_check
+PATCH /api/org-backups/restore/{jobId}    owner   { source }            → 204
+GET   /api/org-backups/verify             owner|admin  → row/file counts vs manifest, integrity_check
       (also exposed as backup.Verify(app) for an embedder)
 ```
 
@@ -227,7 +229,7 @@ Organization group.
 - Header: "Last backed up 3 hours ago" from the newest `succeeded` row of any
   kind, or "Never backed up". Amber warning when older than 7 days or never.
 - **Back up now**: `useForm` + zod — PUT URL, passphrase, confirm. Submit →
-  `POST /api/backups`. Progress from the running row's `bytes` via
+  `POST /api/org-backups`. Progress from the running row's `bytes` via
   `useLiveQuery`.
 - **Restore** (owner): GET URL, passphrase, an "I understand current data is
   replaced" checkbox. `force` is CLI-only; a mismatch shows the diff and points

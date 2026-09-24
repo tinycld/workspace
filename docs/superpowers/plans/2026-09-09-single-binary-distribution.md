@@ -1476,3 +1476,143 @@ Expected: succeeds without the `embedassets` tag and with no staged asset tree, 
 **Deliberately deferred:** Feature enable/disable UI. The spec's model is "all migrations run; disabling gates UI and routes", which is existing package-registry behavior rather than new work in this plan. If the setup UI lacks per-package toggles, that is a follow-up plan, not a task here.
 
 **Verify during implementation:** Whether hooks can be dropped entirely (spec's "Possible scope reduction"). `coreserver/server.go:132-138` says `$`-bindings must exist before hooks execute, but does not require hook files to exist, and `registerHooks` returns early when none are found. Task 2 embeds them regardless, so the plan is correct either way.
+
+---
+
+## Implementation Deviations (2026-09-10)
+
+Recorded before implementation, after verifying the plan against the code.
+Everything not listed here was confirmed accurate: the jsvm line numbers and
+`filesContent` contract, the symlink farms (138 migrations / 3 hooks), the 104
+source-map files, and the `migratecmd`-vs-`core.AppMigrations` reasoning in
+Task 7. Measured baseline binary is 50.1 MB, not 64 MB — more headroom under
+the 100 MB budget, no change needed.
+
+### D1 — Task 6: use PocketBase's own `--dir`, drop `--data-dir` / `--sqlite-dir`
+
+The plan set `TINYCLD_STATE_DIR` from a new `--data-dir` flag. That env var
+only drives core's helpers (`statePbDataDir`, `stateReleasesDir`,
+`stateBuildsDir`); PocketBase reads its data directory from its own `--dir`
+persistent flag (`pocketbase.go:222`), which nothing set. `--data-dir /srv/tc`
+would therefore put releases under `/srv/tc` while the database stayed in
+`./pb_data` beside the binary.
+
+`--dir` is now the single source of truth. `TINYCLD_STATE_DIR` is derived from
+it (its parent) so core's helpers stay consistent with the database location.
+`ResolveStandaloneConfig` and its four tests are dropped along with the
+separable-SQLite flag; `--http` / `--https` are already PocketBase flags.
+
+### D2 — New Task 6b: gate the in-app package install/rebuild surface
+
+In-app package installation is not supported in this distribution — the
+rebuild path shells out to a Go toolchain and pnpm, neither of which exists
+beside a static binary. Upgrading means downloading a new binary. The plan
+documented this in Task 9 but no task enforced it, so the flow stayed
+reachable and would fail at runtime. Task 6b gates those routes in standalone
+mode.
+
+### D3 — Task 3: test through a real HTTP request
+
+The plan's static test asserted only that the handler was non-nil and that its
+own fixture FS contained the fixtures it had just been given — it would pass
+even if the handler ignored the FS entirely. It now serves real requests and
+asserts the embedded bytes and the SPA fallback come back.
+
+### D4 — Task 5: the size check only works after Task 6
+
+Task 5 Step 6 expects the tagged build to weigh ~64 MB immediately. It cannot:
+until `main.go` calls the accessors (Task 6), nothing references the
+`embeddedAssets` variable and the linker eliminates it, so the tagged binary
+stays byte-identical to the untagged one (measured: 50.1 MB, a 48-byte delta)
+while `go list` still reports all 274 embedded files. Verified by adding a
+temporary reference, which took the binary to 62.2 MB with the migration
+filenames present. The real size assertion therefore belongs after Task 6's
+wiring, where it now lives.
+
+### D5 — Task 4: cpSync cannot dereference a symlinked source path
+
+The plan's staging script called `cpSync(src, dest, { dereference: true })` on
+each entry of the symlink farms. `cpSync` given a symlinked path treats it as a
+directory and fails with `ERR_FS_EISDIR`. The script now copies
+`realpathSync(src)` with `copyFileSync`.
+
+### D6 — Task 4: the biome exclusion is unnecessary
+
+`tinycld/biome.json` already excludes `server` and `server/**/*`, which covers
+`server/embedded_assets/`. Confirmed by probing a deliberately ill-formatted
+file there. Only the `.gitignore` entry was added.
+
+### D7 — Task 7: `ci-assemble-workspace.mjs` does not exist
+
+Verified: no such file anywhere in the workspace. `docker-publish.yml` inlines
+the assembly instead (~45 lines at its "Assemble workspace from pinned release
+manifest" step), which is the case Task 7 Step 2 anticipated — extract the block
+into a shared script both workflows call.
+
+Two consequences the plan's snippet misses. First, it would not have worked as
+written: it invokes the nonexistent script AND omits the `cp` of the pinned
+`pnpm-lock.yaml` and `package-versions.json`, so the following
+`pnpm install --frozen-lockfile` would have had no pinned lockfile. Second, the
+inlined block does more than the snippet implies — it clones each sibling at its
+pinned sha from `manifest.json`, passes a hardcoded `--with` list to bootstrap,
+and copies three files to load-bearing destinations (`tinycld/.release-manifest`
+in particular, which silently no-ops elsewhere because the Dockerfile's COPY is
+a tolerant wildcard).
+
+Extracting it is a shared-file refactor of the release-critical image-publish
+path, verifiable only when a real release fires. That is held for an explicit
+decision rather than bundled into this plan.
+
+### D8 — Task 8 found two implementation bugs the unit tests could not
+
+The e2e boot test earned its place immediately: both bugs passed every unit test
+and both produced a binary that looked healthy.
+
+**The asset-pool routes shadowed the embedded bundle.** `server.go` registers
+`/_expo/static/{path...}` and `/assets/{path...}` before the catch-all, reading
+the cross-release pool at `<releasesDir>/_static/`. A standalone build has no
+pool, so those prefixes won and answered 404 for assets that were present inside
+the binary — the shell rendered, every script 404'd, and the app booted blank.
+Now gated on `PublicFS == nil`, with a route-table regression test. The e2e spec
+checks every chunk rather than the first, since a shell whose scripts 404 still
+attaches `#root`.
+
+**Appending `--dir` broke `--help` and `--version`.** Standalone mode injected
+its default data dir into `os.Args` unconditionally; with no subcommand present
+cobra read the path as a stray positional and failed with
+`unknown command "./tinycld-data/pb_data"`. `ShouldInjectDataDir` now restricts
+injection to invocations that carry a real command (all four — `serve`,
+`superuser`, `create-owner`, `export-types` — need a data dir), mirroring the
+existing `--http` injection's `HasSubcommand` guard.
+
+Also: the spec lives in its own `tests/standalone/` tree with its own config,
+not under `tests/e2e/`, whose shared `webServer` rebuilds the whole stack (up to
+240s) before any spec runs and would both be irrelevant and collide with the
+binary under test. `tests/install/` is the existing precedent. One server is
+shared across the file's tests, since each boot re-applies every migration.
+
+### D9 — Windows support: two POSIX syscalls, both in hosting-only code
+
+Windows was blocked by exactly two calls, found by iterating the cross-compile
+(Go reports only the first failing package, so the second was hidden behind the
+first):
+
+- `syscall.O_NOFOLLOW` — `tenantcfg/runtime.go`, guarding a router-authored
+  `.runtime` write against a symlink planted by a hostile tenant.
+- `syscall.Umask` — `tenantmain/tenantmain.go`, keeping a tenant socket from
+  being briefly world-reachable.
+
+Both serve the multi-tenant hosting router, which runs on Linux; a self-hosted
+single-org binary executes neither. They are split by platform rather than
+removed — deleting `O_NOFOLLOW` would weaken a live isolation control in
+hosting. The Windows variants are honest about what they cannot reproduce: the
+`O_NOFOLLOW` stand-in notes its TOCTOU window, and the umask variant refuses to
+bind rather than serving unrestricted (matching `confine_other.go`).
+
+Both files live in packages that `PLAN-extract-hosting-from-tinycld.md` says
+should leave this repo; the splits move with their package when that happens.
+
+Six targets now ship (linux amd64/arm64, darwin amd64/arm64, windows
+amd64/arm64), each verified to contain the embed rather than merely to link. A
+`windows-latest` job boots the amd64 build before the release keeps it, and the
+attach step was moved into a `publish` job gated on that smoke test.

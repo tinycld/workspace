@@ -24,8 +24,10 @@ There is no group, team or org-unit concept anywhere. `users.role`
   Leaving removes it.
 - A mail domain can be limited to a group, and every member gets a personal
   mailbox on it.
-- Existing content rules, realtime checks and Go mirrors (`driveshare`,
-  boards/calendar/mail realtime, IMAP auth) do not change.
+- Existing realtime checks and Go mirrors (`driveshare`, boards/calendar/mail
+  realtime, IMAP auth) do not change. Content rules keep their logic, but
+  every rule that tests the membership table's `user` gains a login guard
+  (see "Grant rows and anonymous requests").
 - Core stays ignorant of package tables. Packages register with core.
 - Works on web and native.
 
@@ -56,8 +58,24 @@ to `user`, and `user` becomes optional. A row is one of three kinds:
 
 A derived row is a clone of its grant row with `user` set. All other fields
 (`role`, `created_by`, …) copy through. Existing rules test `user`, so a
-derived row satisfies them the same as a direct share. Content rules, Go
-mirrors and realtime do not change.
+derived row satisfies them the same as a direct share. Go mirrors and
+realtime do not change.
+
+#### Grant rows and anonymous requests
+
+It is NOT true that a grant row (`user` empty) never matches a rule that
+tests `user`. For a request with no login, PocketBase resolves
+`@request.auth.id` to NULL and rewrites `x = NULL` as `(x = '' OR x IS NULL)`.
+So `…_via_x.user ?= @request.auth.id` matches every grant row, and a caller
+with no token gets the grant's role. `@request.auth.disabled != true` does not
+stop it, because NULL is not true either.
+
+Rule: every rule, in any collection, that tests the membership table's `user`
+must also require `@request.auth.id != ""`, conjoined with that test. On a
+rule that also admits anonymous callers another way (a share-link token), put
+the guard inside the member branch only. `rlstest.RequireAuthGuardOnGrantRules`
+scans every rule of a migrated test app and fails on any that forgets it;
+each package with a grant table calls it from its rule tests.
 
 Rules on the membership table only:
 

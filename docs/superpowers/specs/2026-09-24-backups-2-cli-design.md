@@ -19,7 +19,7 @@ tinycld backup restore --from <file|GET-url> [--passphrase-file <f>] [--force] [
 tinycld backup list                          [--output table|json|csv]
 ```
 
-- `create --out` streams `POST /api/backups { stream: true }` to disk;
+- `create --out` streams `POST /api/org-backups { stream: true }` to disk;
   `-` writes to stdout for piping (`| aws s3 cp - s3://…`). Progress on
   stderr from bytes received.
 - `create --to` asks the server to push; the CLI polls the ledger row and
@@ -29,7 +29,7 @@ tinycld backup list                          [--output table|json|csv]
   `format.NewRangeSource`. Prints format version, created, source, core and
   package versions, counts, total bytes, and OK/FAIL per member.
 - `restore --from <file>` uploads the file as the multipart body of
-  `POST /api/backups/restore`; `--from <url>` sends the URL. Before sending,
+  `POST /api/org-backups/restore`; `--from <url>` sends the URL. Before sending,
   the CLI runs `inspect` on a file source and prints the manifest summary; it
   then requires `--yes` or an interactive confirmation. After 202 it polls the
   job status and prints each phase. A `waiting_for_source` status prompts for

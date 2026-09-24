@@ -3458,11 +3458,11 @@ func RegisterBackupSelfRebuild(app *pocketbase.PocketBase) // in Register when s
 ```
 Routes:
 ```
-POST  /api/backups                  requireAdmin   {target, passphrase} → 202 {id} | {stream:true, passphrase} → 200 octet-stream
-GET   /api/backups/{id}             requireAdmin   → the ledger row
-POST  /api/backups/restore          requireOwner   JSON {source, passphrase, force} | multipart (archive, passphrase, force) → 202 {jobId}
-PATCH /api/backups/restore/{id}     requireOwner   {source} → 204
-GET   /api/backups/verify           requireAdmin   → VerifyReport
+POST  /api/org-backups                  requireAdmin   {target, passphrase} → 202 {id} | {stream:true, passphrase} → 200 octet-stream
+GET   /api/org-backups/{id}             requireAdmin   → the ledger row
+POST  /api/org-backups/restore          requireOwner   JSON {source, passphrase, force} | multipart (archive, passphrase, force) → 202 {jobId}
+PATCH /api/org-backups/restore/{id}     requireOwner   {source} → 204
+GET   /api/org-backups/verify           requireAdmin   → VerifyReport
 ```
 
 - [ ] **Step 1: OAuth scope**
@@ -3480,11 +3480,11 @@ scopes: []Scope{{ID: ScopeProfile, Label: ProfileScopeLabel}, {ID: ScopeBackups,
 ```
 and in `endpoints`:
 ```go
-"POST /api/backups":          {ScopeBackups},
-"POST /api/backups/restore":  {ScopeBackups},
-"GET /api/backups/verify":    {ScopeBackups},
+"POST /api/org-backups":          {ScopeBackups},
+"POST /api/org-backups/restore":  {ScopeBackups},
+"GET /api/org-backups/verify":    {ScopeBackups},
 ```
-`GET /api/backups/{id}` and `PATCH …/{id}` have path parameters; register them with `RegisterSharedEndpoint` semantics if the endpoint table is exact-match only — read `ScopeForRoute` (`middleware.go`) and use whichever mechanism (`EndpointPrefixes` on a core entry, or a prefix rule) matches a wildcard; the test below asserts a token with `backups` can call `GET /api/backups/{id}`.
+`GET /api/org-backups/{id}` and `PATCH …/{id}` have path parameters; register them with `RegisterSharedEndpoint` semantics if the endpoint table is exact-match only — read `ScopeForRoute` (`middleware.go`) and use whichever mechanism (`EndpointPrefixes` on a core entry, or a prefix rule) matches a wildcard; the test below asserts a token with `backups` can call `GET /api/org-backups/{id}`.
 
 Run `cd core/server && go test ./oauth/...` — the discovery test that snapshots `scopes_supported` needs `"backups"` added.
 
@@ -3522,7 +3522,7 @@ func TestBackupStreamAsAdmin(t *testing.T) {
     scenario := &tests.ApiScenario{
         Name:   "stream",
         Method: http.MethodPost,
-        URL:    "/api/backups",
+        URL:    "/api/org-backups",
         Body:   strings.NewReader(`{"stream":true,"passphrase":"correct horse battery"}`),
         Headers: map[string]string{"Authorization": token, "Content-Type": "application/json"},
         ExpectedStatus: http.StatusOK,
@@ -3557,7 +3557,7 @@ func TestBackupToTargetReturns202(t *testing.T) {
     }))
     t.Cleanup(srv.Close)
     scenario := &tests.ApiScenario{
-        Method: http.MethodPost, URL: "/api/backups",
+        Method: http.MethodPost, URL: "/api/org-backups",
         Body:    strings.NewReader(`{"target":"` + srv.URL + `/x.age","passphrase":"correct horse battery"}`),
         Headers: map[string]string{"Authorization": token, "Content-Type": "application/json"},
         ExpectedStatus: http.StatusAccepted, ExpectedContent: []string{`"id":`},
@@ -3578,7 +3578,7 @@ func TestBackupRejectsShortPassphrase(t *testing.T) {
     admin := mustCreateUser(t, app, "admin@example.com", "admin")
     token, _ := tokenForUser(app, admin)
     (&tests.ApiScenario{
-        Method: http.MethodPost, URL: "/api/backups",
+        Method: http.MethodPost, URL: "/api/org-backups",
         Body:    strings.NewReader(`{"stream":true,"passphrase":"short"}`),
         Headers: map[string]string{"Authorization": token, "Content-Type": "application/json"},
         ExpectedStatus: http.StatusBadRequest, ExpectedContent: []string{"12 characters"},
@@ -3591,7 +3591,7 @@ func TestBackupForbiddenForMember(t *testing.T) {
     member := mustCreateUser(t, app, "m@example.com", "member")
     token, _ := tokenForUser(app, member)
     (&tests.ApiScenario{
-        Method: http.MethodPost, URL: "/api/backups",
+        Method: http.MethodPost, URL: "/api/org-backups",
         Body:    strings.NewReader(`{"stream":true,"passphrase":"correct horse battery"}`),
         Headers: map[string]string{"Authorization": token, "Content-Type": "application/json"},
         ExpectedStatus: http.StatusForbidden,
@@ -3613,7 +3613,7 @@ func TestRestoreOwnerOnlyAndMultipart(t *testing.T) {
 
     body, contentType := multipartArchive(t, archive.Bytes(), map[string]string{"passphrase": "correct horse battery"})
     (&tests.ApiScenario{
-        Method: http.MethodPost, URL: "/api/backups/restore", Body: bytes.NewReader(body),
+        Method: http.MethodPost, URL: "/api/org-backups/restore", Body: bytes.NewReader(body),
         Headers: map[string]string{"Authorization": adminTok, "Content-Type": contentType},
         ExpectedStatus: http.StatusForbidden,
         TestAppFactory: func(testing.TB) *tests.TestApp { return app }, DisableTestAppCleanup: true,
@@ -3621,7 +3621,7 @@ func TestRestoreOwnerOnlyAndMultipart(t *testing.T) {
 
     body, contentType = multipartArchive(t, archive.Bytes(), map[string]string{"passphrase": "correct horse battery"})
     (&tests.ApiScenario{
-        Method: http.MethodPost, URL: "/api/backups/restore", Body: bytes.NewReader(body),
+        Method: http.MethodPost, URL: "/api/org-backups/restore", Body: bytes.NewReader(body),
         Headers: map[string]string{"Authorization": ownerTok, "Content-Type": contentType},
         ExpectedStatus: http.StatusAccepted, ExpectedContent: []string{`"jobId":`},
         TestAppFactory: func(testing.TB) *tests.TestApp { return app }, DisableTestAppCleanup: true,
@@ -3640,7 +3640,7 @@ func TestRestoreMismatchReturns409WithDiff(t *testing.T) {
 
     body, contentType := multipartArchive(t, archive.Bytes(), map[string]string{"passphrase": "correct horse battery", "sync": "1"})
     (&tests.ApiScenario{
-        Method: http.MethodPost, URL: "/api/backups/restore", Body: bytes.NewReader(body),
+        Method: http.MethodPost, URL: "/api/org-backups/restore", Body: bytes.NewReader(body),
         Headers: map[string]string{"Authorization": tok, "Content-Type": contentType},
         ExpectedStatus: http.StatusConflict, ExpectedContent: []string{`"missing":["mail"]`},
         TestAppFactory: func(testing.TB) *tests.TestApp { return app }, DisableTestAppCleanup: true,
@@ -3652,7 +3652,7 @@ func TestVerifyEndpoint(t *testing.T) {
     admin := mustCreateUser(t, app, "admin@example.com", "admin")
     tok, _ := tokenForUser(app, admin)
     (&tests.ApiScenario{
-        Method: http.MethodGet, URL: "/api/backups/verify",
+        Method: http.MethodGet, URL: "/api/org-backups/verify",
         Headers: map[string]string{"Authorization": tok},
         ExpectedStatus: http.StatusOK, ExpectedContent: []string{`"integrityOk":true`},
         TestAppFactory: func(testing.TB) *tests.TestApp { return app }, DisableTestAppCleanup: true,
@@ -3693,7 +3693,7 @@ type backupBody struct {
 // the backup package directly.
 func RegisterBackupEndpoints(app *pocketbase.PocketBase) {
     app.OnServe().BindFunc(func(e *core.ServeEvent) error {
-        g := e.Router.Group("/api/backups")
+        g := e.Router.Group("/api/org-backups")
         g.POST("", func(re *core.RequestEvent) error { return handleBackupCreate(app, re) }).BindFunc(requireAdmin)
         g.GET("/verify", func(re *core.RequestEvent) error { return handleBackupVerify(app, re) }).BindFunc(requireAdmin)
         g.POST("/restore", func(re *core.RequestEvent) error { return handleRestore(app, re) }).BindFunc(requireOwner)
@@ -3893,7 +3893,7 @@ func handleRestoreSwap(re *core.RequestEvent) error {
     return re.NoContent(http.StatusNoContent)
 }
 ```
-Note: the multipart-upload restore holds the request open through phase 6; the rebuilder ends the process, so the client sees the connection drop after the 202 — the CLI (Plan 2) treats that as expected and polls `GET /api/backups/{id}` after reconnecting. Send the 202 *before* calling `backup.Restore` in the multipart branch is not possible (the mismatch needs to be reported); instead the CLI relies on the row. Keep the code as written; document it in the handler comment.
+Note: the multipart-upload restore holds the request open through phase 6; the rebuilder ends the process, so the client sees the connection drop after the 202 — the CLI (Plan 2) treats that as expected and polls `GET /api/org-backups/{id}` after reconnecting. Send the 202 *before* calling `backup.Restore` in the multipart branch is not possible (the mismatch needs to be reported); instead the CLI relies on the row. Keep the code as written; document it in the handler comment.
 
 - [ ] **Step 4: Implement `backup_rebuild.go`**
 
@@ -4102,8 +4102,8 @@ git commit -m "feat(core): register backups collection; shared formatTimeAgo"
 export type BackupRow = NonNullable<ReturnType<typeof useBackupRows>['data']>[number]
 export function useBackupRows()                    // live query, newest first, with initiatorName
 export function lastBackedUp(rows): { label: string; isStale: boolean }      // pure; 'Last backed up 3h ago' | 'Never backed up'; stale when > 7 days or never
-export function useBackupNow()                     // form + mutation → POST /api/backups {target, passphrase}
-export function useRestore()                       // form + mutation → POST /api/backups/restore {source, passphrase}
+export function useBackupNow()                     // form + mutation → POST /api/org-backups {target, passphrase}
+export function useRestore()                       // form + mutation → POST /api/org-backups/restore {source, passphrase}
 export function useSwapSource(jobId)               // form + mutation → PATCH
 export function useDismissPreRestoreKey(row)       // no server call: pre-restore identity is shown from row.metadata; dismiss hides it locally (useState)
 ```
@@ -4220,7 +4220,7 @@ export function useBackupNow() {
     const { setError, getValues, reset } = form
     const start = useMutation({
         mutationFn: (data: z.infer<typeof backupSchema>) =>
-            pb.send<{ id: string }>('/api/backups', {
+            pb.send<{ id: string }>('/api/org-backups', {
                 method: 'POST',
                 body: { target: data.target, passphrase: data.passphrase },
             }),
@@ -4245,7 +4245,7 @@ export function useRestore() {
     const { setError, getValues } = form
     const start = useMutation({
         mutationFn: (data: z.infer<typeof restoreSchema>) =>
-            pb.send<{ jobId: string }>('/api/backups/restore', {
+            pb.send<{ jobId: string }>('/api/org-backups/restore', {
                 method: 'POST',
                 body: { source: data.source, passphrase: data.passphrase },
             }),
@@ -4262,7 +4262,7 @@ export function useSwapSource(jobId: string) {
     const { setError, getValues, reset } = form
     const swap = useMutation({
         mutationFn: (data: z.infer<typeof swapSchema>) =>
-            pb.send(`/api/backups/restore/${jobId}`, { method: 'PATCH', body: { source: data.source } }),
+            pb.send(`/api/org-backups/restore/${jobId}`, { method: 'PATCH', body: { source: data.source } }),
         onSuccess: () => {
             reset()
             queryClient.invalidateQueries({ queryKey: ['backups'] })
@@ -4638,7 +4638,7 @@ Expected: PASS, including `check:core-isolation`.
 
 - [ ] **Step 3: Manual smoke on the dev server**
 
-`cd /Users/nas/code/tinycld/tinycld && pnpm run dev`; sign in as the owner; Settings → Backups; run a backup to a local sink (`python3 -m http.server` does not accept PUT — use the Node sink from the spec, or `nc -l 9999 > /dev/null`); confirm the History row and the notification bell. Then `curl -s -X POST -H "Authorization: <token>" -H 'Content-Type: application/json' -d '{"stream":true,"passphrase":"correct horse battery"}' http://localhost:8090/api/backups > /tmp/b.age` and `age -d -o /tmp/b.tar.zst /tmp/b.age` if `age` is installed locally.
+`cd /Users/nas/code/tinycld/tinycld && pnpm run dev`; sign in as the owner; Settings → Backups; run a backup to a local sink (`python3 -m http.server` does not accept PUT — use the Node sink from the spec, or `nc -l 9999 > /dev/null`); confirm the History row and the notification bell. Then `curl -s -X POST -H "Authorization: <token>" -H 'Content-Type: application/json' -d '{"stream":true,"passphrase":"correct horse battery"}' http://localhost:8090/api/org-backups > /tmp/b.age` and `age -d -o /tmp/b.tar.zst /tmp/b.age` if `age` is installed locally.
 
 - [ ] **Step 4: Open the PR**
 
