@@ -196,7 +196,8 @@ git commit -m "feat(audit): export Log for non-collection events"
 ### Task 3: `backups` collection migration + generated types
 
 **Files:**
-- Create: `core/server/pb_migrations/2050000000_create_backups.js`
+- Create: `core/server/pb_migrations/2050000000_create_backups.js`, `core/server/pb_migrations/2050000001_audit_logs_backup_actions.js`
+- Modify: `app/a/(app)/settings/audit-log.tsx` (filter options + badge colours)
 - Regenerates: `core/types/pbSchema.ts`, `core/types/pbZodSchema.ts` (gitignored, do not commit)
 
 **Interfaces:**
@@ -257,16 +258,48 @@ migrate(
 )
 ```
 
-- [ ] **Step 2: Regenerate types and confirm the interface appears**
+- [ ] **Step 2: Extend `audit_logs.action` for the backup events**
 
-Run: `cd /Users/nas/code/tinycld/tinycld && pnpm run packages:generate && grep -n "interface Backups" core/types/pbSchema.ts`
-Expected: one match with the fields above.
+The released `1780000000_create_audit_logs.js` makes `action` a select of `created|updated|deleted`; `audit.Log` (Task 2) is called with `backup.created`, `backup.failed`, `restore.started`, `restore.succeeded`, `restore.failed` and PocketBase rejects unknown select values on save. Released migrations are frozen, so append `core/server/pb_migrations/2050000001_audit_logs_backup_actions.js` (same shape as `1910000003_pkg_install_log_add_version_change_action.js`):
 
-- [ ] **Step 3: Commit**
+```js
+/// <reference path="../pb_data/types.d.ts" />
+// Backups and restores are audited as events, not as collection writes, so
+// they need their own action values beside created/updated/deleted.
+migrate(
+    app => {
+        const collection = app.findCollectionByNameOrId('audit_logs')
+        const field = collection.fields.getById('al_action')
+        field.values = [
+            'created', 'updated', 'deleted',
+            'backup.created', 'backup.failed',
+            'restore.started', 'restore.succeeded', 'restore.failed',
+        ]
+        app.save(collection)
+    },
+    app => {
+        const collection = app.findCollectionByNameOrId('audit_logs')
+        const field = collection.fields.getById('al_action')
+        field.values = ['created', 'updated', 'deleted']
+        app.save(collection)
+    }
+)
+```
+
+- [ ] **Step 3: Regenerate types and confirm the interfaces**
+
+Run: `cd /Users/nas/code/tinycld/tinycld && pnpm run packages:generate && grep -n "interface Backups" core/types/pbSchema.ts && grep -n "backup.created" core/types/pbSchema.ts`
+Expected: one match each.
+
+- [ ] **Step 4: Teach the audit-log screen the new actions**
+
+`app/a/(app)/settings/audit-log.tsx` keys its filter options (`ACTION_OPTIONS`, ~line 15) and its badge colour maps (~lines 43-50) on the `action` union; after the regeneration `tsc` fails until every value is covered. Add filter options `Backup created`, `Backup failed`, `Restore started`, `Restore succeeded`, `Restore failed`, and map `backup.created`/`restore.succeeded` to the `created` (success) classes, `backup.failed`/`restore.failed` to the `deleted` (danger) classes, `restore.started` to the `updated` (accent) classes. Run `cd /Users/nas/code/tinycld/tinycld && pnpm run checks` — must pass.
+
+- [ ] **Step 5: Commit**
 
 ```bash
-git add core/server/pb_migrations/2050000000_create_backups.js
-git commit -m "feat(core): backups ledger collection"
+git add core/server/pb_migrations/2050000000_create_backups.js core/server/pb_migrations/2050000001_audit_logs_backup_actions.js "app/a/(app)/settings/audit-log.tsx"
+git commit -m "feat(core): backups ledger collection and backup audit actions"
 ```
 
 ---
