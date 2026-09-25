@@ -275,6 +275,31 @@ what restore replaces, single-binary limits, the CLI commands.
   next boot.
 - Secrets never leave memory except the pre-restore identity, which lives in
   the ledger row until the restore succeeds.
+- Presigned URLs never reach an error message or a log line. `format`
+  redacts `*url.Error` at every failure point, so an error that escapes the
+  package carries the scheme and host and nothing else.
+
+### Accepted residual risk: a caller-supplied URL
+
+The server PUTs to, and GETs from, a URL the caller supplies — that IS the
+feature, since an operator's own bucket is the only place a backup can go. It
+also makes the server a fetcher for whoever can reach the endpoint, so the
+residual risk is stated rather than claimed away. The endpoint is admin-only
+(backup) or owner-only (restore); no response body is ever surfaced to the
+caller (a backup discards the target's response, and a restore's body must
+decrypt with the caller's own passphrase or the restore fails); and the ledger
+records hostnames only. The API refuses the address classes that are reachable
+only from the server and are never a legitimate target — loopback, link-local
+(169.254.0.0/16 and fe80::/10, where instance-metadata services live), the
+unspecified address and multicast — resolving the hostname rather than
+pattern-matching it, and refusing a name any of whose addresses is in those
+classes. RFC1918 private ranges stay allowed: a MinIO box on the operator's own
+LAN is a normal target. `TINYCLD_BACKUP_ALLOW_LOOPBACK=1`, read once at
+registration, relaxes the check for local development and the e2e harness. This
+reduces the surface rather than closing it: a name can resolve differently
+between the check and the transfer, and the remaining exposure is a blind
+request from the server's network position made by someone who already
+administers the deployment.
 
 ## Testing
 
