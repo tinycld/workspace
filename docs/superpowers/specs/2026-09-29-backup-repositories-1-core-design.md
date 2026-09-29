@@ -38,12 +38,12 @@ deduplicating stores later.
 
 | Question | Decision |
 |---|---|
-| PBS client | `github.com/osshield/gopbs` (pure Go, AGPL-3.0, compatible with our AGPL-3.0-only). No cgo, no subprocess. |
+| PBS client | `github.com/osshield/gopbs` through the fork `github.com/nathanstitt/gopbs` (replace directive). Pure Go, AGPL-3.0, compatible with our AGPL-3.0-only. No cgo, no subprocess. Upstream is backup-only; the fork adds `UploadStream`, `ListSnapshots`, the reader session, `DecodeBlob` and the `pbstest` server (`~/code/vendor/gopbs/HANDOFF-tinycld-reader.md`). |
 | Scheduled repositories per org | One, stored in `system_config`. |
 | Scheduler | `app.Cron()`. |
 | PBS encryption key | Admin pastes a key file, or presses Generate. Stored `is_secret`. |
 | Retention | The repository's own. |
-| Snapshot race | A delete hold (below), not exported PocketBase hooks. |
+| Snapshot race | A delete hold (below). The PocketBase storage delete hook is unexported, so one fork file (`core/filesystem_hooks_tinycld.go`) exposes it. |
 
 ## Packages
 
@@ -101,7 +101,7 @@ reads it, from the same process or from another process on the same host.
 
 - `pb_data/backup-hold` = `{ holder, expires }`. Expiry is 1 hour; the holder
   renews it every 20 minutes and removes it when the walk ends.
-- Core binds the PocketBase storage delete hook once at startup. While a valid
+- Core binds the PocketBase storage delete hook once at startup, through `core.OnFilesystemDelete(app)` from the fork file. A handler that does not call `e.Next()` skips the delete; `DeletePrefix` deletes through `Delete`, so it is covered too. While a valid
   (unexpired) hold exists, a delete appends its key to
   `pb_data/backup-hold.journal` and does not delete. An expired hold counts as
   no hold.
@@ -129,7 +129,7 @@ passes its own ID). Files:
 |---|---|
 | `manifest.blob` | `format.Manifest` JSON. `Manifest()` reads only this. |
 | `data.db.didx` | The raw `VACUUM INTO` file, content-defined chunks. |
-| `storage.pxar.didx` | A pxar archive of the stored files. Browsable and single-file restorable in the PBS UI. |
+| `storage.tar.didx` | A plain tar stream of the stored files. `proxmox-backup-client restore <snap> storage.tar -` gives a normal tar file. The PBS UI cannot browse single files; pxar would need a content decoder nobody has written. |
 
 No age and no zstd: PBS compresses each chunk and, when a key is set, encrypts
 each chunk. Each upload names the previous snapshot as its base so known chunks
@@ -137,7 +137,7 @@ are skipped.
 
 - `Put`: upload the three files, then `finish`. A run that fails before
   `finish` leaves no snapshot on PBS.
-- `Fetch`: restore `data.db`, extract `storage/`. PBS verifies chunk digests;
+- `Fetch`: stream `data.db.didx` to `dir/data.db` and untar `storage.tar.didx` into `dir/storage/` with the same member checks as the archive stager. PBS verifies chunk digests;
   the engine still runs `PRAGMA integrity_check` and compares row counts with
   the manifest.
 - `List`: snapshots of this backup ID, newest first.
@@ -212,7 +212,7 @@ backups), retention is set on PBS, and restoring outside tinycld with
 
 ## New dependency
 
-`github.com/osshield/gopbs` in `core/server/go.mod`.
+`github.com/osshield/gopbs` in `core/server/go.mod`, replaced by the fork.
 
 ## Error handling
 
@@ -228,9 +228,7 @@ backups), retention is set on PBS, and restoring outside tinycld with
 
 - Repository contract suite (put, manifest, fetch, list, interrupted put),
   run against `archive` (`httptest` destination) and `pbs`.
-- `pbs` in CI runs against an in-process fake PBS: gopbs's server-side
-  protocol types if it has them, otherwise a minimal fake of the backup and
-  reader protocols. A real-PBS test runs when `TINYCLD_TEST_PBS` is set.
+- `pbs` in CI runs against `gopbs/pbstest`, the fork's in-process PBS. A real-PBS test runs when `TINYCLD_TEST_PBS` is set.
 - Delete hold: journal while held, expiry, drain by cron and at boot,
   second-holder refusal, idempotent drain, a snapshot taken from a second
   process while the app deletes files.
