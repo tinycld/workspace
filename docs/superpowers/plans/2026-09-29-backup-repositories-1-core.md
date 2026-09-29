@@ -848,6 +848,7 @@ type Options struct {
 var ErrS3Storage error
 
 func FromDataDir(opts Options) (*Snapshot, error)
+func VacuumReadOnly(src, dest string) error // the default Vacuum; exported for callers that wrap it
 ```
 
 - [ ] **Step 1: Write the failing tests**
@@ -1171,7 +1172,7 @@ func FromDataDir(opts Options) (snap *Snapshot, err error) {
 	})
 	vacuum := opts.Vacuum
 	if vacuum == nil {
-		vacuum = func(d string) error { return vacuumReadOnly(filepath.Join(opts.DataDir, "data.db"), d) }
+		vacuum = func(d string) error { return VacuumReadOnly(filepath.Join(opts.DataDir, "data.db"), d) }
 	}
 	if err = vacuum(dest); err != nil {
 		return nil, err
@@ -1232,10 +1233,12 @@ func FromDataDir(opts Options) (snap *Snapshot, err error) {
 	}, nil
 }
 
-// vacuumReadOnly copies a live database from another process. mode=ro never
-// creates -wal/-shm files, which would be owned by this process's user and
-// could stop the app from opening its own database.
-func vacuumReadOnly(src, dest string) error {
+// VacuumReadOnly copies a live database from another process through a
+// read-only connection. SQLite may still create the -shm file when it is
+// missing (the app is not running), owned by this process's user; a caller
+// that runs as a different user than the app must stop the app from starting
+// during the call and fix ownership before the app next starts.
+func VacuumReadOnly(src, dest string) error {
 	if strings.Contains(dest, "'") {
 		return errors.New("backup: snapshot path must not contain a quote")
 	}
