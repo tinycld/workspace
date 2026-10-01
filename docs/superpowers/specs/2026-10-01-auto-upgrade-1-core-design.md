@@ -22,7 +22,7 @@ An org owner can set "Automatically upgrade packages when new versions are avail
 | `autoupgrade.enabled` | `true` / `false` (default `true`; see "Default") | org owner |
 | `autoupgrade.window` | `HH:MM-HH:MM` in server time (default `02:00-05:00`) | org owner, unless managed |
 
-A supervisor claims the prefix `autoupgrade.window.` through `syscfg.ManagedPrefixes`. Core then refuses writes to the window key and hides its editor. The `enabled` key is never managed: the owner always decides.
+A supervisor claims the prefix `autoupgrade.window` (no trailing dot: `syscfg.IsManaged` is a plain prefix match, so `autoupgrade.window.` would not match the key) through `syscfg.ManagedPrefixes`. Core then refuses writes to the window key and hides its editor. The `enabled` key is never managed: the owner always decides.
 
 ### Default
 
@@ -58,8 +58,6 @@ type Status struct {
     LastRun    time.Time
     LastResult string    // "upgraded", "no updates", "paused: conflict", "rolled back"
     NextCheck  time.Time
-    Pause      *Pause    // current conflict pause, if any
-    Blocked    []Blocked // version sets that will not be tried again
 }
 
 func SetDelegate(d Delegate)
@@ -100,6 +98,7 @@ The flag, the window and `cleared` are PocketBase data, so the UI writes them th
 
 - A server hook on `system_settings` (create and update of `autoupgrade.enabled`) calls `Delegate.PolicyChanged`. Boot calls it once with the stored value.
 - The existing `syscfg` write guard refuses `autoupgrade.window` while it is managed.
+- The pause and the blocked sets are rows in `autoupgrade_state`, so the UI reads them with `useLiveQuery` and clears a blocked set with a pbtsdb update of `cleared`. `Status` carries only computed values.
 - `Status` is computed, not stored, so it is the one read endpoint: `GET /api/admin/packages/auto-upgrade/status` (owner-only, `RequireOwner`), returning `{windowManaged, status}`.
 
 ## UI

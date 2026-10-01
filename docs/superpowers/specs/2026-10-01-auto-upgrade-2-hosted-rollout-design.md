@@ -11,8 +11,9 @@ The router upgrades every org that has auto-upgrade on. It does this in rings, s
 `tenantboot` installs its own `autoupgrade.Delegate`:
 
 - `PolicyChanged(enabled)` sends `POST /api/v1/auto-upgrade {enabled}` over `ctl.sock`. The router stores it in `orgs.auto_upgrade`. The tenant sends it again at each boot, so the tenant DB is authoritative.
-- `Status()` reads `GET /api/v1/auto-upgrade` over `ctl.sock`: last and next upgrade for this org, its rollout state, and the blocked sets that apply to it.
-- The tenant syscfg provider claims `autoupgrade.window.`. The operator owns the window.
+- `Status()` reads `GET /api/v1/auto-upgrade` over `ctl.sock`: last and next upgrade for this org and its rollout state.
+- The blocked sets and the conflict pause that apply to this org are written into the tenant's own `autoupgrade_state` rows (part 1) when the tenant boots and after each `Status()` call, with `cleared` read-only for the owner (blocks are global and the operator clears them).
+- The tenant syscfg provider claims `autoupgrade.window`. The operator owns the window.
 
 `tenantboot` also sets the Sentry scope tags `org=<slug>` and `release=<recipe_hash>` on every event. This is hosting code. Core does not change.
 
