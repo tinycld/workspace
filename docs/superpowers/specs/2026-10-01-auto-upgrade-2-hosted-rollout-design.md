@@ -2,6 +2,17 @@
 
 Part 2 of 4. Depends on part 1 (`autoupgrade.Delegate`). Repos: `hosting`, `utils` (installer SMTP settings).
 
+## Implementation split
+
+- **2a (rollout core)** — plan `docs/superpowers/plans/2026-10-01-auto-upgrade-2a-rollout-core.md`: tenant delegate, router schema, alerts + SMTP, discovery, rings, deploy with snapshot, boot-failure revert, crash signal, operator API, installer, README.
+- **2b (signals)** — 5xx counting, the Sentry signal and tenant Sentry tags, upgrade-snapshot retention and the manual rollback route.
+
+Changes from this spec found while planning 2a:
+
+- The router has no cheap compat solve (peerVersions come from fetching each package), so the compat gate is a build of the target set: a build refused with `builder.ErrPeerConflict` means "does not resolve".
+- The tenant shows the router's status text; it does not mirror pause/blocked rows into `autoupgrade_state` (a mirrored row would offer a "Clear" the router ignores).
+- A lockfile entry must be pinned (`git+file://…#vX.Y.Z` or an exact npm version) to be upgraded; an unpinned git spec has no known current version.
+
 ## Goal
 
 The router upgrades every org that has auto-upgrade on. It does this in rings, starting with a few sentinel orgs. It watches each upgraded org for errors and halts the rollout when one occurs. It reverts automatically only when the new build does not boot. For every other error, it halts and sends email to the hosting operators.
