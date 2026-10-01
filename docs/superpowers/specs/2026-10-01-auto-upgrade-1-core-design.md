@@ -4,7 +4,8 @@ Part 1 of 4. Order: **1 core (this) → 2 hosted rollout → 3 deploy command �
 
 ## Goal
 
-An org owner can set "Automatically upgrade packages when new versions are available" on Settings → Packages. A single-tenant install then upgrades itself in a maintenance window. A composing server (a supervisor) can replace the scheduler and control the cadence. Core does not know what the supervisor is.
+An org owner can set "Automatically upgrade packages when new versions are available" on Settings → Packages and in the onboarding wizard. It is on by default. A single-tenant install then upgrades itself in a maintenance window. A composing server (a supervisor) can replace the scheduler and control the cadence. Core does not know what the supervisor is.
+
 
 ## Non-goals
 
@@ -18,10 +19,14 @@ An org owner can set "Automatically upgrade packages when new versions are avail
 
 | Key | Value | Owner |
 |---|---|---|
-| `autoupgrade.enabled` | `true` / `false` (default `false`) | org owner |
+| `autoupgrade.enabled` | `true` / `false` (default `true`; see "Default") | org owner |
 | `autoupgrade.window` | `HH:MM-HH:MM` in server time (default `02:00-05:00`) | org owner, unless managed |
 
 A supervisor claims the prefix `autoupgrade.window.` through `syscfg.ManagedPrefixes`. Core then refuses writes to the window key and hides its editor. The `enabled` key is never managed: the owner always decides.
+
+### Default
+
+There are no live installs yet, so no existing database must be handled. The migration that creates `autoupgrade_state` also inserts the `system_settings` row `autoupgrade.enabled = true`. Every install starts with the row, so the UI only updates it and the reader needs no fallback for a missing row.
 
 New collection `autoupgrade_state` (owner-only rules). It holds at most one `pause` row, and one `blocked` row for each blocked set:
 
@@ -89,17 +94,17 @@ The gate, for both `pause` and `blocked`:
 
 The pause email lists each conflicting package, its target version, and the `peerVersions` range that rejects it. The blocked email names the set and the rollback reason.
 
-## API
+## Data path
 
-Owner-only (`RequireOwner`), under `/api/admin/packages/auto-upgrade`:
+The flag, the window and `cleared` are PocketBase data, so the UI writes them through pbtsdb (`useMutation` on the `system_settings` and `autoupgrade_state` collections). No write endpoint is added.
 
-| Method | Path | |
-|---|---|---|
-| `GET` | `` | `{enabled, window, windowManaged, status}` |
-| `PUT` | `` | `{enabled, window?}`. Writes `system_settings` and calls `PolicyChanged`. A `window` while managed is a 400. |
-| `POST` | `/blocked/{id}/clear` | sets `cleared` so the set can be tried again |
+- A server hook on `system_settings` (create and update of `autoupgrade.enabled`) calls `Delegate.PolicyChanged`. Boot calls it once with the stored value.
+- The existing `syscfg` write guard refuses `autoupgrade.window` while it is managed.
+- `Status` is computed, not stored, so it is the one read endpoint: `GET /api/admin/packages/auto-upgrade/status` (owner-only, `RequireOwner`), returning `{windowManaged, status}`.
 
 ## UI
+
+### Settings → Packages
 
 `PackageManager.tsx` gets an `AutoUpgradeSection` above the package list:
 
@@ -109,7 +114,9 @@ Owner-only (`RequireOwner`), under `/api/admin/packages/auto-upgrade`:
 - The pause, with its conflict detail.
 - The blocked sets, each with a "Clear" button.
 
-Data comes from the endpoint above through `useMutation` / a query hook in the same style as `use-package-versions.ts`.
+### Onboarding wizard
+
+The "Choose your apps" step (`core/components/setup/wizard/steps/AppsStep.tsx`) gets a checkbox below the app cards: "Upgrade apps automatically when new versions are available". It is checked by default and writes the same `autoupgrade.enabled` key. When `status.available` is false, the checkbox is not shown.
 
 ## Help
 
