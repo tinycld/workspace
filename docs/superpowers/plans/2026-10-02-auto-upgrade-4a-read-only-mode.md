@@ -470,7 +470,7 @@ Delete the old `RegisterSentry(app)` call in `RegisterSharedEarly`, and keep the
 
 - [ ] **Step 4: Run, expect PASS**
 
-Run: `go test ./coreserver -v -run 'TestReadOnly|TestSentry|TestComposition'`, then `go test ./...` and `gofmt -l .`. The core composition parity tests must still pass. If one lists hooks or middleware by name, update its expectation. Then also run hosting's parity tests: `cd ~/code/tinycld/hosting && go test ./tenantboot -run Parity`. Hosting resolves core through `../tinycld`, so this tests the change in place. They must pass, because both compositions call `RegisterSharedEarly`.
+Run: `go test ./coreserver -v -run 'TestReadOnly|TestSentry|TestComposition'`, then `go test ./...` and `gofmt -l .`. The core composition parity tests must still pass. If one lists hooks or middleware by name, update its expectation. Then also run hosting's parity tests: `cd ~/code/tinycld/hosting && go test ./tenantboot -run 'TestTenantComposition|TestArtifactTenantBinds'` (the tests in `composition_parity_test.go`; `-run Parity` matches no test name). Hosting resolves core through `../tinycld`, so this tests the change in place. They must pass, because both compositions call `RegisterSharedEarly`.
 
 - [ ] **Step 5: Commit**
 
