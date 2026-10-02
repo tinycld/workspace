@@ -21,9 +21,14 @@ Read-only mode is a core feature with no host knowledge:
 
 - `coreserver` adds middleware: while the mode is on, every non-`GET`/`HEAD`/`OPTIONS` request to `/api/` gets `503` with `Retry-After: 2` and a JSON body `{"code": "read_only"}`. Realtime subscriptions stay open.
 - Two triggers turn it on: `SIGUSR2`, and an internal call that the D3 supervisor and the D2 router use.
-- The client (`@tinycld/core/lib/mutations`) retries a `503 read_only` mutation after `Retry-After`, up to 3 times, before it shows an error. pbtsdb already reconnects realtime when the old process closes its SSE streams.
+- The client retries a `503 read_only` request after `Retry-After`, up to 3 times, before it shows an error. The retry is in the fetch layer, not in `useMutation`: a refused request never reached a handler, so it is safe to send again, but a multi-step mutation is not safe to run again from the start. Every direct call to the server uses `serverFetch` (`@tinycld/core/lib/server-fetch`). The SDK and pbtsdb get it through `pb.beforeSend`, and the XHR upload helper retries the same way. A biome rule flags a raw `fetch` in runtime code. pbtsdb already reconnects realtime when the old process closes its SSE streams.
+- `POST /api/realtime` is let through. It only sets the topics of an open SSE stream, and a client that reconnects during the pause needs it to subscribe again.
+- `SIGUSR2` only enters the mode. Only the internal call leaves it, so a stray or repeated signal cannot open writes during a migration.
 
-**Known limit.** During step 2 the old process serves reads against a schema that may have changed. A read that touches a renamed or removed column can fail until step 3. The window is the migration time, usually under a few seconds.
+**Known limits.**
+
+- During step 2 the old process serves reads against a schema that may have changed. A read that touches a renamed or removed column can fail until step 3. The window is the migration time, usually under a few seconds.
+- The mode covers HTTP requests to `/api/` only. Writes that do not come from such a request continue during the pause: cron jobs, background workers, notifications, mail sync and delivery, and DAV (CalDAV, CardDAV, WebDAV). This is accepted for now.
 
 If the new process does not pass readiness, the old one leaves read-only mode and keeps serving. If the migrations already ran, the revert path from part 2 (restore the snapshot, then start the old build) still applies.
 
@@ -78,4 +83,4 @@ The rollback logic moves from `entrypoint.sh` into Go, with the same steps and t
 - **D1:** a load loop against two orgs during `systemctl reload` sees 0 failed requests and 0 refused connections, and the tenant PIDs do not change. A new binary that never sends `READY=1` leaves the old router serving.
 - **D2:** during a swap, a write gets `503 read_only` with `Retry-After`, reads continue, and an open realtime subscription reconnects and gets the next event. A new build that fails readiness leaves the old process serving and writable.
 - **D3:** in the bare-metal entrypoint test, a package change under a request loop has 0 refused connections, and a broken build is rolled back with the old child serving throughout.
-- **Read-only mode:** unit tests for the middleware (methods, paths, realtime untouched) and for the client retry.
+- **Read-only mode:** unit tests for the middleware (methods, paths, realtime untouched) and for the client retry. Done in plan 4a.
