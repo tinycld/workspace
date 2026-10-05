@@ -1,0 +1,71 @@
+nodeLinker: hoisted
+linkWorkspacePackages: true
+strictPeerDependencies: false
+enablePrePostScripts: true
+
+# pnpm 11 ships a default minimumReleaseAge supply-chain gate (~24h) that
+# rejects very freshly-published versions. The @tinycld/* libraries are
+# first-party and released in lockstep with these members, so a same-day
+# pbtsdb (or other @tinycld dep) bump must install immediately rather than
+# blocking install/CI for a day. Exclude them from the gate; third-party
+# packages still get the freshness window.
+minimumReleaseAgeExclude:
+  - pbtsdb
+  - '@tinycld/*'
+
+packages:
+  - tinycld
+  - tinycld/core
+  - tinycld/package-scripts
+  - contacts
+  - mail
+  - calendar
+  - drive
+  - calc
+  - text
+  - google-takeout-import
+  - boards
+  - search-alpha
+  - search-beta
+  - shortcut-stub
+
+# Build-script approvals (pnpm blocks dependency build scripts by default).
+allowBuilds:
+  esbuild: true
+  '@sentry/cli': true
+
+# Framework/native/styling version pins — derived from
+# tinycld/core/package-versions.json (the source of truth) by
+# tinycld/scripts/write-workspace-root.ts. These keep the OTA rebuild's
+# --no-frozen-lockfile install from drifting these deps off the embedded
+# native binary.
+overrides:
+  '@gluestack-ui/utils': 5.0.5-alpha.0
+  '@sentry/react-native': 7.11.0
+  '@shopify/flash-list': 2.0.2
+  '@tanstack/db': 0.9.0
+  '@tanstack/query-db-collection': 1.2.13
+  '@tanstack/react-db': 0.3.8
+  '@tanstack/react-query': 5.101.0
+  expo: 55.0.26
+  expo-image: 55.0.11
+  expo-image-manipulator: 55.0.21
+  expo-image-picker: 55.0.20
+  expo-router: 55.0.16
+  lucide-react-native: 1.17.0
+  react: 19.2.0
+  react-dom: 19.2.0
+  react-hook-form: 7.77.0
+  react-native: 0.83.6
+  react-native-drax: github:nathanstitt/react-native-drax#bc83061aceb7eae462cecc4756b3a4c81dcd1d30
+  react-native-gesture-handler: 3.0.1
+  react-native-reanimated: 4.2.1
+  react-native-safe-area-context: 5.6.2
+  react-native-screens: 4.23.0
+  react-native-svg: 15.15.3
+  react-native-web: 0.21.2
+  react-native-worklets: 0.7.4
+  tailwind-merge: 3.6.0
+  tailwind-variants: 0.1.20
+  tailwindcss: 4.3.0
+  uniwind: 1.8.0
