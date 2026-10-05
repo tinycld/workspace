@@ -1,14 +1,20 @@
 # TinyCld workspace — example root
 
-> **This is _our_ workspace, published as an example.** It's a real, committed
-> pnpm-workspace root showing what a checked-in TinyCld setup looks like — the
-> coordination files (`package.json`, `pnpm-workspace.yaml`, `tinycld.packages.ts`,
-> `scripts/`) plus the `.gitignore` that keeps each member's own repo out.
->
-> **Do not clone or fork this repo.** Every developer's workspace is unique — a
-> different set of member packages, a different `pnpm-lock.yaml`, its own remote.
-> You assemble *yours* with `@tinycld/bootstrap`, then commit it to *your own*
-> repository. This one exists to be read, not to be your starting point.
+**TinyCld is a self-hosted workspace alternative** — mail, calendar, contacts,
+drive, documents and spreadsheets — built on Expo Router and PocketBase, with
+every feature shipped as a separately-installable package. Install only the
+packages you want. See **[tinycld.org](https://tinycld.org)** for the full story,
+or [tinycld/tinycld](https://github.com/tinycld/tinycld) for the app shell.
+
+A TinyCld install is a pnpm workspace: an app shell plus one sibling git repo per
+feature. This repo shows what the **workspace root** of such a setup looks like.
+
+> **Read this, don't clone it.** These are the coordination files only
+> (`package.json`, `pnpm-workspace.yaml`, version pins, `.gitignore`) — no member
+> packages and no lockfile. Every developer's workspace is unique: a different set
+> of members, its own lockfile, its own remote. You assemble *yours* with
+> `@tinycld/bootstrap` and commit it to *your own* repository. This one exists to
+> be read, not to be your starting point.
 
 ## How to assemble your own workspace
 
